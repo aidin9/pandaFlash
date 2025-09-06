@@ -1,14 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
+  output: 'export',
   images: {
     unoptimized: true,
   },
+  basePath: '/pandaFlash',
+  assetPrefix: '/pandaFlash/',
 }
 
-export default nextConfig
+module.exports = nextConfig
