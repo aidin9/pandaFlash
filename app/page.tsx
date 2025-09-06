@@ -376,7 +376,7 @@ export default function Page() {
       log('[v0] Writing bootstub.panda.bin (start block 2)');
       await writeWithFallback(dev, bootstubBin, ladder);
 
-      try { await dev.requestOut(0x00, undefined, 1000); } catch { /* detach (optional) */ }
+      try { await (dev as any).requestOut?.(0x00, 0, 1000); } catch {}
       log('[v0] Flash complete 🎉');
     } catch (e: any) {
       log('[v0] Flash failed:', e?.message || String(e));
