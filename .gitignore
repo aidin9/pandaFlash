@@ -5,7 +5,7 @@
 
 # next.js
 /.next/
-/out/
+# /out/ So we can build in gh pages
 
 # production
 /build
