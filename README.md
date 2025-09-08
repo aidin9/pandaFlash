@@ -1,5 +1,10 @@
 # Panda firmware flasher
 
+This is web app is intended to eventually allow flashing of White Panda devices directly with SunnyPilot Basic and Advanced firmwares from GitHub.
+For now, it should work with the "Upload Binaries" option.
+
+Check back later for updates!
+
 *Automatically synced with your [v0.app](https://v0.app) deployments*
 
 [![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/aidinb-9448s-projects/v0-panda-firmware-flasher)
