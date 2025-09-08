@@ -1,6 +1,6 @@
 # Panda firmware flasher
 
-This is web app is intended to eventually allow flashing of White Panda devices directly with SunnyPilot Basic and Advanced firmwares from GitHub.
+This is web app is intended to eventually allow flashing of White Panda devices directly with [SunnyPilot Basic](https://github.com/sunnypilot/panda/tree/sunnypilot_wp_chrysler_basic) and [Advanced](https://github.com/sunnypilot/panda/tree/sunnypilot_wp_chrysler_advanced) firmwares from GitHub.
 For now, it should work with the "Upload Binaries" option, and I've attached some binaries for testing under *prebuilt-binaries* above.
 
 # Usage
