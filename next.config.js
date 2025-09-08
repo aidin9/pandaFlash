@@ -1,10 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',         // enables static HTML export
+  output: 'export',
   images: {
-    unoptimized: true,      // disables Next.js server image optimization
+    unoptimized: true,
   },
-  basePath: '/pandaFlash',  // 👈 repo name
+  basePath: '/pandaFlash',
   assetPrefix: '/pandaFlash/',
 }
 
