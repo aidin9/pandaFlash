@@ -309,7 +309,7 @@ export default function Page() {
   const [normalDevice, setNormalDevice] = useState<USBDevice | null>(null)
   const [dfuDevice, setDfuDevice] = useState<DfuDevice | null>(null)
 
-  const [firmwareType, setFirmwareType] = useState<"sunny-basic" | "upload">("sunny-basic")
+  const [firmwareType, setFirmwareType] = useState<"sunny-basic" | "sunny-advanced" | "upload">("sunny-basic")
 
   const [progress, setProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 })
   const [pandaBin, setPandaBin] = useState<ArrayBuffer | null>(null)
@@ -500,67 +500,17 @@ export default function Page() {
   }, [dfuDevice, normalDevice, log])
 
   const loadFirmware = useCallback(async () => {
-    if (firmwareType === "sunny-basic") {
-      try {
-        log("[v0] Loading SunnyPilot Basic firmware...")
-
-        const pandaUrl = "/pandaFlash/panda.bin"
-        const bootstubUrl = "/pandaFlash/bootstub.panda.bin"
-
-        log(`[v0] Fetching panda.bin from: ${pandaUrl}`)
-        log(`[v0] Fetching bootstub.panda.bin from: ${bootstubUrl}`)
-
-        const [pandaResponse, bootstubResponse] = await Promise.all([
-          fetch(pandaUrl).catch((e) => {
-            log(`[v0] Failed to fetch panda.bin: ${e.message}`)
-            throw e
-          }),
-          fetch(bootstubUrl).catch((e) => {
-            log(`[v0] Failed to fetch bootstub.panda.bin: ${e.message}`)
-            throw e
-          }),
-        ])
-
-        log(`[v0] Panda response status: ${pandaResponse.status} ${pandaResponse.statusText}`)
-        log(`[v0] Bootstub response status: ${bootstubResponse.status} ${bootstubResponse.statusText}`)
-
-        if (!pandaResponse.ok) {
-          throw new Error(`Failed to load panda.bin (HTTP ${pandaResponse.status}): ${pandaResponse.statusText}`)
-        }
-        if (!bootstubResponse.ok) {
-          throw new Error(
-            `Failed to load bootstub.panda.bin (HTTP ${bootstubResponse.status}): ${bootstubResponse.statusText}`,
-          )
-        }
-
-        const pandaBuffer = await pandaResponse.arrayBuffer()
-        const bootstubBuffer = await bootstubResponse.arrayBuffer()
-
-        if (pandaBuffer.byteLength === 0) {
-          throw new Error("panda.bin is empty")
-        }
-        if (bootstubBuffer.byteLength === 0) {
-          throw new Error("bootstub.panda.bin is empty")
-        }
-
-        setPandaBin(pandaBuffer)
-        setBootstubBin(bootstubBuffer)
-
-        log(
-          `[v0] Loaded SunnyPilot Basic - Panda: ${pandaBuffer.byteLength} bytes, Bootstub: ${bootstubBuffer.byteLength} bytes`,
-        )
-        return { pandaBuffer, bootstubBuffer }
-      } catch (error: any) {
-        log("[v0] Failed to load prebuilt firmware:", error.message)
-        throw new Error(`Failed to load SunnyPilot Basic firmware: ${error.message}`)
-      }
-    } else {
-      // Use uploaded files
-      if (!pandaBin || !bootstubBin) {
-        throw new Error("Please upload both panda.bin and bootstub.panda.bin files")
-      }
-      return { pandaBuffer: pandaBin, bootstubBuffer: bootstubBin }
+    if (firmwareType === "sunny-basic" || firmwareType === "sunny-advanced") {
+      throw new Error(
+        "Please download the firmware files using the links above, then upload them using the file picker.",
+      )
     }
+
+    // Use uploaded files
+    if (!pandaBin || !bootstubBin) {
+      throw new Error("Please upload both panda.bin and bootstub.panda.bin files")
+    }
+    return { pandaBuffer: pandaBin, bootstubBuffer: bootstubBin }
   }, [firmwareType, pandaBin, bootstubBin, log])
 
   const writeWithFallback = useCallback(
@@ -746,7 +696,7 @@ export default function Page() {
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6 relative">
       <div className="fixed bottom-4 right-4 text-xs text-muted-foreground bg-background/80 backdrop-blur-sm px-2 py-1 rounded border">
-        <div>v44</div>
+        <div>v45</div>
         <div>Sept 9 2025</div>
       </div>
 
@@ -765,62 +715,152 @@ export default function Page() {
       <Card>
         <CardHeader>
           <CardTitle>Firmware Selection</CardTitle>
-          <CardDescription>Choose your firmware source</CardDescription>
+          <CardDescription>Choose your firmware variant and download the required files</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Select value={firmwareType} onValueChange={(value: "sunny-basic" | "upload") => setFirmwareType(value)}>
+          <Select
+            value={firmwareType}
+            onValueChange={(value: "sunny-basic" | "sunny-advanced" | "upload") => setFirmwareType(value)}
+          >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="sunny-basic">SunnyPilot Basic (Prebuilt)</SelectItem>
-              <SelectItem value="upload">Upload Binary Files</SelectItem>
+              <SelectItem value="sunny-basic">SunnyPilot Basic</SelectItem>
+              <SelectItem value="sunny-advanced">SunnyPilot Advanced</SelectItem>
+              <SelectItem value="upload">Upload Custom Files</SelectItem>
             </SelectContent>
           </Select>
 
-          {firmwareType === "upload" && (
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">Upload binaries (panda.bin and bootstub.panda.bin)</label>
-              <div className="flex items-center justify-center w-full">
-                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-muted-foreground/25 rounded-lg cursor-pointer bg-muted/10 hover:bg-muted/20 transition-colors">
-                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                    <svg
-                      className="w-8 h-8 mb-4 text-muted-foreground"
-                      aria-hidden="true"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 20 16"
-                    >
-                      <path
-                        stroke="currentColor"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"
-                      />
-                    </svg>
-                    <p className="mb-2 text-sm text-muted-foreground">
-                      <span className="font-semibold">Click to upload</span> or drag and drop
-                    </p>
-                    <p className="text-xs text-muted-foreground">panda.bin and bootstub.panda.bin files</p>
-                  </div>
-                  <input type="file" multiple onChange={onPickFiles} className="hidden" accept=".bin" />
-                </label>
-              </div>
-              {pandaBin && bootstubBin && (
-                <div className="flex items-center gap-2 text-sm text-green-600">
+          {firmwareType === "sunny-basic" && (
+            <div className="space-y-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <h3 className="font-semibold text-blue-900">SunnyPilot Basic - Download Required Files</h3>
+              <p className="text-sm text-blue-700">
+                Download both files below, then upload them using the file picker:
+              </p>
+              <div className="grid gap-2">
+                <a
+                  href="https://github.com/sunnyhaibin/panda/releases/latest/download/panda.bin"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
+                >
                   <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                     <path
                       fillRule="evenodd"
-                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                      d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
                       clipRule="evenodd"
                     />
                   </svg>
-                  Both binary files loaded successfully
-                </div>
-              )}
+                  Download panda.bin
+                </a>
+                <a
+                  href="https://github.com/sunnyhaibin/panda/releases/latest/download/bootstub.panda.bin"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      fillRule="evenodd"
+                      d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  Download bootstub.panda.bin
+                </a>
+              </div>
             </div>
           )}
+
+          {firmwareType === "sunny-advanced" && (
+            <div className="space-y-3 p-4 bg-purple-50 rounded-lg border border-purple-200">
+              <h3 className="font-semibold text-purple-900">SunnyPilot Advanced - Download Required Files</h3>
+              <p className="text-sm text-purple-700">
+                Download both files below, then upload them using the file picker:
+              </p>
+              <div className="grid gap-2">
+                <a
+                  href="https://github.com/sunnyhaibin/panda/releases/latest/download/panda_h7.bin"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors text-sm"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      fillRule="evenodd"
+                      d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  Download panda_h7.bin
+                </a>
+                <a
+                  href="https://github.com/sunnyhaibin/panda/releases/latest/download/bootstub.panda_h7.bin"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors text-sm"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      fillRule="evenodd"
+                      d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  Download bootstub.panda_h7.bin
+                </a>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <label className="block text-sm font-medium">
+              {firmwareType === "upload" ? "Upload your binary files" : "Upload the downloaded firmware files"}
+            </label>
+            <div className="flex items-center justify-center w-full">
+              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-muted-foreground/25 rounded-lg cursor-pointer bg-muted/10 hover:bg-muted/20 transition-colors">
+                <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                  <svg
+                    className="w-8 h-8 mb-4 text-muted-foreground"
+                    aria-hidden="true"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 20 16"
+                  >
+                    <path
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"
+                    />
+                  </svg>
+                  <p className="mb-2 text-sm text-muted-foreground">
+                    <span className="font-semibold">Click to upload</span> or drag and drop
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {firmwareType === "upload"
+                      ? "panda.bin and bootstub.panda.bin files"
+                      : "the two downloaded .bin files"}
+                  </p>
+                </div>
+                <input type="file" multiple onChange={onPickFiles} className="hidden" accept=".bin" />
+              </label>
+            </div>
+            {pandaBin && bootstubBin && (
+              <div className="flex items-center gap-2 text-sm text-green-600">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path
+                    fillRule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                Both binary files loaded successfully
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -893,7 +933,13 @@ export default function Page() {
           <CardHeader>
             <CardTitle>Flash Firmware</CardTitle>
             <CardDescription>
-              Ready to flash {firmwareType === "sunny-basic" ? "SunnyPilot Basic" : "uploaded"} firmware
+              Ready to flash{" "}
+              {firmwareType === "sunny-basic"
+                ? "SunnyPilot Basic"
+                : firmwareType === "sunny-advanced"
+                  ? "SunnyPilot Advanced"
+                  : "uploaded"}{" "}
+              firmware
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -905,11 +951,7 @@ export default function Page() {
             </div>
 
             <div className="flex gap-2">
-              <Button
-                onClick={flash}
-                disabled={firmwareType === "upload" && (!pandaBin || !bootstubBin)}
-                className="flex-1"
-              >
+              <Button onClick={flash} disabled={!pandaBin || !bootstubBin} className="flex-1">
                 Flash Firmware
               </Button>
               <Button onClick={disconnect} variant="outline">
