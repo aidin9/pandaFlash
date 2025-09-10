@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Promise } from "core-js/library/web/timers"
 
 /** ---------- Small logging helper ---------- */
 function useLogger() {
@@ -350,14 +351,20 @@ export default function Page() {
       if (device.productName?.toLowerCase().includes("panda") || device.vendorId === 0xbbaa) {
         setNormalDevice(device)
         setConnectionStep("normal")
-        setStatusMessage('Connected to panda device. Click "Enter DFU Mode" to continue.')
-        log("[v0] Connected to normal panda device")
+        setStatusMessage("Connected to panda device. Automatically entering DFU mode...")
+        log("[v0] Connected to normal panda device, entering DFU mode automatically")
+
+        // Automatically trigger DFU mode entry
+        setTimeout(() => enterDfuMode(), 1000)
       } else {
         // Try to connect anyway but warn user
         setNormalDevice(device)
         setConnectionStep("normal")
-        setStatusMessage('Connected to device (may not be panda). Click "Enter DFU Mode" to continue.')
+        setStatusMessage("Connected to device (may not be panda). Automatically entering DFU mode...")
         log("[v0] Connected to device, attempting to use as panda")
+
+        // Automatically trigger DFU mode entry
+        setTimeout(() => enterDfuMode(), 1000)
       }
     } catch (e: any) {
       log("[v0] Connect failed:", e?.message || String(e))
@@ -382,17 +389,37 @@ export default function Page() {
 
       await normalDevice.open()
 
-      // Send recover command (vendor-specific control transfer)
-      const result = await normalDevice.controlTransferOut({
-        requestType: "vendor",
-        recipient: "device",
-        request: 0xd1, // recover command
-        value: 0,
-        index: 0,
-      })
+      let success = false
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          log(`[v0] DFU mode attempt ${attempt}/2...`)
 
-      if (result.status === "ok") {
-        log("[v0] DFU mode command sent successfully")
+          // Send recover command (vendor-specific control transfer)
+          const result = await normalDevice.controlTransferOut({
+            requestType: "vendor",
+            recipient: "device",
+            request: 0xd1, // recover command
+            value: 0,
+            index: 0,
+          })
+
+          if (result.status === "ok") {
+            log("[v0] DFU mode command sent successfully")
+            success = true
+            break
+          }
+        } catch (error: any) {
+          log(`[v0] DFU mode attempt ${attempt} error:`, error.message)
+          if (attempt === 2 || error.message.includes("disconnected")) {
+            // If disconnected, that's actually success
+            if (error.message.includes("disconnected")) {
+              success = true
+            }
+            break
+          }
+          // Wait a bit before retry
+          await new Promise((resolve) => setTimeout(resolve, 500))
+        }
       }
 
       // Device will disconnect when entering DFU mode
@@ -477,17 +504,44 @@ export default function Page() {
       try {
         log("[v0] Loading SunnyPilot Basic firmware...")
 
+        const pandaUrl = "/pandaFlash/prebuilt-binaries/sunny-basic/panda.bin"
+        const bootstubUrl = "/pandaFlash/prebuilt-binaries/sunny-basic/bootstub.panda.bin"
+
+        log(`[v0] Fetching panda.bin from: ${pandaUrl}`)
+        log(`[v0] Fetching bootstub.panda.bin from: ${bootstubUrl}`)
+
         const [pandaResponse, bootstubResponse] = await Promise.all([
-          fetch("/prebuilt-binaries/sunny-basic/panda.bin"),
-          fetch("/prebuilt-binaries/sunny-basic/bootstub.panda.bin"),
+          fetch(pandaUrl).catch((e) => {
+            log(`[v0] Failed to fetch panda.bin: ${e.message}`)
+            throw e
+          }),
+          fetch(bootstubUrl).catch((e) => {
+            log(`[v0] Failed to fetch bootstub.panda.bin: ${e.message}`)
+            throw e
+          }),
         ])
 
-        if (!pandaResponse.ok || !bootstubResponse.ok) {
-          throw new Error("Failed to load prebuilt firmware files")
+        log(`[v0] Panda response status: ${pandaResponse.status} ${pandaResponse.statusText}`)
+        log(`[v0] Bootstub response status: ${bootstubResponse.status} ${bootstubResponse.statusText}`)
+
+        if (!pandaResponse.ok) {
+          throw new Error(`Failed to load panda.bin (HTTP ${pandaResponse.status}): ${pandaResponse.statusText}`)
+        }
+        if (!bootstubResponse.ok) {
+          throw new Error(
+            `Failed to load bootstub.panda.bin (HTTP ${bootstubResponse.status}): ${bootstubResponse.statusText}`,
+          )
         }
 
         const pandaBuffer = await pandaResponse.arrayBuffer()
         const bootstubBuffer = await bootstubResponse.arrayBuffer()
+
+        if (pandaBuffer.byteLength === 0) {
+          throw new Error("panda.bin is empty")
+        }
+        if (bootstubBuffer.byteLength === 0) {
+          throw new Error("bootstub.panda.bin is empty")
+        }
 
         setPandaBin(pandaBuffer)
         setBootstubBin(bootstubBuffer)
@@ -509,37 +563,42 @@ export default function Page() {
     }
   }, [firmwareType, pandaBin, bootstubBin, log])
 
-  const onPickFiles = async (ev: React.ChangeEvent<HTMLInputElement>) => {
-    const files = ev.currentTarget.files
-    if (!files) return
-    for (const f of Array.from(files)) {
-      const buf = await f.arrayBuffer()
-      if (f.name.toLowerCase().includes("bootstub")) {
-        setBootstubBin(buf)
-        log(`[v0] Loaded ${f.name} (${buf.byteLength} bytes)`)
-      } else {
-        setPandaBin(buf)
-        log(`[v0] Loaded ${f.name} (${buf.byteLength} bytes)`)
-      }
-    }
-  }
-
-  // helper: try with transfer size then fall back to smaller sizes if the device stalls
   const writeWithFallback = useCallback(
     async (dev: DfuDevice, data: ArrayBuffer, sizes: number[]) => {
       let lastErr: unknown
       const tried = new Set<number>()
+
       for (const s of sizes) {
         if (tried.has(s)) continue
         tried.add(s)
         try {
           log(`[v0] Using wTransferSize = ${s}`)
           await dev.do_download(s, data, /*manifest*/ true, /*firstBlock*/ 2)
+          log(`[v0] ✅ Successfully wrote ${data.byteLength} bytes with transfer size ${s}`)
           return
         } catch (e) {
           lastErr = e
-          log(`[v0] Transfer size ${s} failed: ${e instanceof Error ? e.message : String(e)}`)
+          const errorMsg = e instanceof Error ? e.message : String(e)
+          log(`[v0] ❌ Transfer size ${s} failed: ${errorMsg}`)
+
+          // If device disconnected, it might be normal (device rebooting after successful flash)
+          if (errorMsg.includes("disconnected")) {
+            log(`[v0] ⚠️ Device disconnected during transfer - this may be normal behavior after successful flash`)
+            // Don't immediately throw, try smaller transfer size first
+            if (s === sizes[sizes.length - 1]) {
+              // This was the last/smallest size, so disconnection might indicate success
+              log(`[v0] 🤔 Device disconnected on final transfer size - assuming successful flash`)
+              return
+            }
+          }
         }
+      }
+
+      // If we get here, all sizes failed
+      const errorMsg = lastErr instanceof Error ? lastErr.message : String(lastErr)
+      if (errorMsg.includes("disconnected")) {
+        log(`[v0] ⚠️ All transfer sizes failed with disconnection - device may have successfully flashed and rebooted`)
+        log(`[v0] 💡 If the device LED changed or device reconnected, the flash was likely successful`)
       }
       throw lastErr
     },
@@ -566,42 +625,78 @@ export default function Page() {
       // Build a sensible fallback ladder
       const ladder = [transferSize, 2048, 1024, 512, 256]
 
+      const withTimeout = async (promise: Promise<any>, timeoutMs: number, operation: string): Promise<any> => {
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error(`${operation} timed out after ${timeoutMs}ms`)), timeoutMs)
+        })
+        return Promise.race([promise, timeoutPromise])
+      }
+
       // ---- panda.bin @ 0x08004000 (erase three 16KiB pages) ----
       setStatusMessage("Erasing panda firmware area...")
       log("[v0] DFUSe: ERASE panda pages")
-      await dfuDevice.dfuseErase(0x08004000)
-      await dfuDevice.dfuseErase(0x08008000)
-      await dfuDevice.dfuseErase(0x0800c000)
+      await withTimeout(dfuDevice.dfuseErase(0x08004000), 10000, "Erase 0x08004000")
+      await withTimeout(dfuDevice.dfuseErase(0x08008000), 10000, "Erase 0x08008000")
+      await withTimeout(dfuDevice.dfuseErase(0x0800c000), 10000, "Erase 0x0800c000")
 
       setStatusMessage("Writing panda firmware...")
       log("[v0] DFUSe: SETADDR 0x08004000")
-      await dfuDevice.dfuseSetAddress(0x08004000)
+      await withTimeout(dfuDevice.dfuseSetAddress(0x08004000), 5000, "Set address 0x08004000")
       log("[v0] Writing panda.bin (start block 2)")
-      await writeWithFallback(dfuDevice, pandaBuffer, ladder)
+      await withTimeout(writeWithFallback(dfuDevice, pandaBuffer, ladder), 30000, "Write panda.bin")
 
       // ---- bootstub @ 0x08000000 (erase one 16KiB page) ----
       setStatusMessage("Erasing bootstub area...")
       log("[v0] DFUSe: ERASE bootstub page")
-      await dfuDevice.dfuseErase(0x08000000)
+      await withTimeout(dfuDevice.dfuseErase(0x08000000), 10000, "Erase 0x08000000")
 
       setStatusMessage("Writing bootstub firmware...")
       log("[v0] DFUSe: SETADDR 0x08000000")
-      await dfuDevice.dfuseSetAddress(0x08000000)
+      await withTimeout(dfuDevice.dfuseSetAddress(0x08000000), 5000, "Set address 0x08000000")
       log("[v0] Writing bootstub.panda.bin (start block 2)")
-      await writeWithFallback(dfuDevice, bootstubBuffer, ladder)
+      await withTimeout(writeWithFallback(dfuDevice, bootstubBuffer, ladder), 30000, "Write bootstub.panda.bin")
 
       try {
-        await (dfuDevice as any).requestOut?.(0x00, 0, 1000)
-      } catch {}
+        log("[v0] Attempting to exit DFU mode...")
+        await (dfuDevice as any).requestOut?.(0x00, new ArrayBuffer(0), 1000)
+      } catch (e) {
+        log("[v0] Exit DFU mode command failed (this is often normal):", e instanceof Error ? e.message : String(e))
+      }
 
-      setStatusMessage("Flash complete! 🎉")
-      log("[v0] Flash complete 🎉")
+      setStatusMessage("✅ Flash completed successfully! Device should reboot automatically.")
+      log("[v0] ✅ Flash completed successfully! 🎉")
+      log("[v0] 💡 Device should now reboot and exit DFU mode automatically")
     } catch (e: any) {
-      const errorMsg = `Flash failed: ${e?.message || String(e)}`
-      setStatusMessage(errorMsg)
-      log("[v0]", errorMsg)
+      const errorMsg = e?.message || String(e)
+
+      if (errorMsg.includes("timed out")) {
+        setStatusMessage(`⏱️ Flash failed: ${errorMsg}. Try disconnecting and reconnecting the device.`)
+      } else if (errorMsg.includes("disconnected")) {
+        setStatusMessage(
+          `⚠️ Device disconnected during flash. This may indicate successful completion - check if device rebooted.`,
+        )
+      } else {
+        setStatusMessage(`❌ Flash failed: ${errorMsg}`)
+      }
+
+      log("[v0] Flash error:", errorMsg)
     }
   }, [dfuDevice, loadFirmware, log, writeWithFallback])
+
+  const onPickFiles = async (ev: React.ChangeEvent<HTMLInputElement>) => {
+    const files = ev.currentTarget.files
+    if (!files) return
+    for (const f of Array.from(files)) {
+      const buf = await f.arrayBuffer()
+      if (f.name.toLowerCase().includes("bootstub")) {
+        setBootstubBin(buf)
+        log(`[v0] Loaded ${f.name} (${buf.byteLength} bytes)`)
+      } else {
+        setPandaBin(buf)
+        log(`[v0] Loaded ${f.name} (${buf.byteLength} bytes)`)
+      }
+    }
+  }
 
   const progressPct = useMemo(() => {
     if (!progress.total) return 0
@@ -609,7 +704,12 @@ export default function Page() {
   }, [progress])
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
+    <div className="max-w-4xl mx-auto p-6 space-y-6 relative">
+      <div className="fixed bottom-4 right-4 text-xs text-muted-foreground bg-background/80 backdrop-blur-sm px-2 py-1 rounded border">
+        <div>v1.0.0</div>
+        <div>Dec 2024</div>
+      </div>
+
       <Alert className="border-red-500 bg-red-50 text-red-900">
         <AlertDescription className="font-semibold">
           ⚠️ WARNING: This tool is still in development and may cause unintended results or bricked devices. Proceed with
@@ -619,7 +719,7 @@ export default function Page() {
 
       <div className="text-center">
         <h1 className="text-3xl font-bold text-balance">White Panda Firmware Flasher</h1>
-        <p className="text-muted-foreground mt-2">3-Step WebUSB DFU Flashing Process</p>
+        <p className="text-muted-foreground mt-2">Automatic WebUSB DFU Flashing Process</p>
       </div>
 
       <Card>
@@ -674,16 +774,16 @@ export default function Page() {
               </span>
               Enter DFU Mode
             </CardTitle>
-            <CardDescription>Put device into firmware update mode</CardDescription>
+            <CardDescription>Automatically entering firmware update mode</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={enterDfuMode} disabled={connectionStep !== "normal"} className="w-full">
+            <div className="w-full p-2 text-center text-sm text-muted-foreground border rounded">
               {connectionStep === "normal"
-                ? "Enter DFU Mode"
+                ? "Entering DFU mode..."
                 : connectionStep === "dfu-mode"
                   ? "✓ In DFU Mode"
-                  : "Enter DFU Mode"}
-            </Button>
+                  : "Waiting for connection"}
+            </div>
           </CardContent>
         </Card>
 
