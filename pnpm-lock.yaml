@@ -114,7 +114,7 @@ importers:
         specifier: 1.0.4
         version: 1.0.4(@types/react-dom@18.0.0)(@types/react@18.0.0)(react-dom@18.0.0(react@18.0.0))(react@18.0.0)
       core-js:
-        specifier: latest
+        specifier: 3.45.1
         version: 3.45.1
       date-fns:
         specifier: 4.1.0
