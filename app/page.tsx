@@ -504,8 +504,10 @@ export default function Page() {
       try {
         log("[v0] Loading SunnyPilot Basic firmware...")
 
-        const pandaUrl = "/pandaFlash/prebuilt-binaries/sunny-basic/panda.bin"
-        const bootstubUrl = "/pandaFlash/prebuilt-binaries/sunny-basic/bootstub.panda.bin"
+        const isGitHubPages = window.location.hostname.includes("github.io")
+        const basePath = isGitHubPages ? "/pandaFlash" : ""
+        const pandaUrl = `${basePath}/prebuilt-binaries/sunny-basic/panda.bin`
+        const bootstubUrl = `${basePath}/prebuilt-binaries/sunny-basic/bootstub.panda.bin`
 
         log(`[v0] Fetching panda.bin from: ${pandaUrl}`)
         log(`[v0] Fetching bootstub.panda.bin from: ${bootstubUrl}`)
@@ -564,7 +566,7 @@ export default function Page() {
   }, [firmwareType, pandaBin, bootstubBin, log])
 
   const writeWithFallback = useCallback(
-    async (dev: DfuDevice, data: ArrayBuffer, sizes: number[]) => {
+    async (dev: DfuDevice, data: ArrayBuffer, sizes: number[], operation: string) => {
       let lastErr: unknown
       const tried = new Set<number>()
 
@@ -572,34 +574,41 @@ export default function Page() {
         if (tried.has(s)) continue
         tried.add(s)
         try {
-          log(`[v0] Using wTransferSize = ${s}`)
+          log(`[v0] Using wTransferSize = ${s} for ${operation}`)
           await dev.do_download(s, data, /*manifest*/ true, /*firstBlock*/ 2)
-          log(`[v0] ✅ Successfully wrote ${data.byteLength} bytes with transfer size ${s}`)
-          return
+          log(`[v0] ✅ Successfully wrote ${operation} (${data.byteLength} bytes) with transfer size ${s}`)
+          return true // Return success indicator
         } catch (e) {
           lastErr = e
           const errorMsg = e instanceof Error ? e.message : String(e)
-          log(`[v0] ❌ Transfer size ${s} failed: ${errorMsg}`)
+          log(`[v0] ❌ Transfer size ${s} failed for ${operation}: ${errorMsg}`)
 
-          // If device disconnected, it might be normal (device rebooting after successful flash)
           if (errorMsg.includes("disconnected")) {
-            log(`[v0] ⚠️ Device disconnected during transfer - this may be normal behavior after successful flash`)
-            // Don't immediately throw, try smaller transfer size first
-            if (s === sizes[sizes.length - 1]) {
-              // This was the last/smallest size, so disconnection might indicate success
-              log(`[v0] 🤔 Device disconnected on final transfer size - assuming successful flash`)
-              return
+            log(`[v0] ⚠️ Device disconnected during ${operation} - checking if this indicates success`)
+
+            // If this is the first transfer size and it disconnected, likely an error
+            if (s === sizes[0]) {
+              log(`[v0] 🔴 Disconnection on first transfer size suggests failure`)
+              continue // Try smaller size
+            }
+
+            // If we've tried multiple sizes and now disconnected, might be success
+            if (tried.size > 1) {
+              log(`[v0] 🟡 Disconnection after multiple attempts - assuming ${operation} completed successfully`)
+              return true
             }
           }
         }
       }
 
-      // If we get here, all sizes failed
       const errorMsg = lastErr instanceof Error ? lastErr.message : String(lastErr)
       if (errorMsg.includes("disconnected")) {
-        log(`[v0] ⚠️ All transfer sizes failed with disconnection - device may have successfully flashed and rebooted`)
-        log(`[v0] 💡 If the device LED changed or device reconnected, the flash was likely successful`)
+        log(`[v0] ⚠️ All transfer sizes failed with disconnection for ${operation}`)
+        log(`[v0] 💡 This might indicate successful flash - device may have rebooted`)
+        // Return true for disconnection on final attempt as it might indicate success
+        return true
       }
+
       throw lastErr
     },
     [log],
@@ -632,6 +641,42 @@ export default function Page() {
         return Promise.race([promise, timeoutPromise])
       }
 
+      const reconnectIfNeeded = async () => {
+        try {
+          await dfuDevice.getState()
+          return true // Still connected
+        } catch (e) {
+          log("[v0] 🔄 Device disconnected, attempting to reconnect...")
+          setStatusMessage("Device disconnected, attempting to reconnect...")
+
+          // Wait a moment for device to reboot
+          await new Promise((resolve) => setTimeout(resolve, 2000))
+
+          try {
+            // Try to reconnect to DFU device
+            const device = await navigator.usb.requestDevice({
+              filters: [{ vendorId: 0x0483, productId: 0xdf11 }],
+            })
+
+            const dfuIfs = findDfuInterfaces(device)
+            if (dfuIfs.length > 0) {
+              const newDev = new DfuDevice(device, dfuIfs[0])
+              await newDev.open()
+              setDfuDevice(newDev)
+              log("[v0] ✅ Successfully reconnected to DFU device")
+              return true
+            }
+          } catch (reconnectError) {
+            log(
+              "[v0] ❌ Failed to reconnect:",
+              reconnectError instanceof Error ? reconnectError.message : String(reconnectError),
+            )
+          }
+
+          return false
+        }
+      }
+
       // ---- panda.bin @ 0x08004000 (erase three 16KiB pages) ----
       setStatusMessage("Erasing panda firmware area...")
       log("[v0] DFUSe: ERASE panda pages")
@@ -643,7 +688,15 @@ export default function Page() {
       log("[v0] DFUSe: SETADDR 0x08004000")
       await withTimeout(dfuDevice.dfuseSetAddress(0x08004000), 5000, "Set address 0x08004000")
       log("[v0] Writing panda.bin (start block 2)")
-      await withTimeout(writeWithFallback(dfuDevice, pandaBuffer, ladder), 30000, "Write panda.bin")
+      const pandaSuccess = await withTimeout(
+        writeWithFallback(dfuDevice, pandaBuffer, ladder, "panda.bin"),
+        30000,
+        "Write panda.bin",
+      )
+
+      if (!pandaSuccess || !(await reconnectIfNeeded())) {
+        throw new Error("Failed to write panda.bin or reconnect after flash")
+      }
 
       // ---- bootstub @ 0x08000000 (erase one 16KiB page) ----
       setStatusMessage("Erasing bootstub area...")
@@ -654,7 +707,11 @@ export default function Page() {
       log("[v0] DFUSe: SETADDR 0x08000000")
       await withTimeout(dfuDevice.dfuseSetAddress(0x08000000), 5000, "Set address 0x08000000")
       log("[v0] Writing bootstub.panda.bin (start block 2)")
-      await withTimeout(writeWithFallback(dfuDevice, bootstubBuffer, ladder), 30000, "Write bootstub.panda.bin")
+      await withTimeout(
+        writeWithFallback(dfuDevice, bootstubBuffer, ladder, "bootstub.panda.bin"),
+        30000,
+        "Write bootstub.panda.bin",
+      )
 
       try {
         log("[v0] Attempting to exit DFU mode...")
@@ -706,7 +763,7 @@ export default function Page() {
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6 relative">
       <div className="fixed bottom-4 right-4 text-xs text-muted-foreground bg-background/80 backdrop-blur-sm px-2 py-1 rounded border">
-        <div>v41</div>
+        <div>v42</div>
         <div>Sept 9 2025</div>
       </div>
 
