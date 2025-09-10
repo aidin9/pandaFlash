@@ -350,20 +350,14 @@ export default function Page() {
       if (device.productName?.toLowerCase().includes("panda") || device.vendorId === 0xbbaa) {
         setNormalDevice(device)
         setConnectionStep("normal")
-        setStatusMessage("Connected to panda device. Automatically entering DFU mode...")
-        log("[v0] Connected to normal panda device, entering DFU mode automatically")
-
-        // Automatically trigger DFU mode entry
-        setTimeout(() => enterDfuMode(), 1000)
+        setStatusMessage("Connected to panda device. Click 'Enter DFU Mode' to continue.")
+        log("[v0] Connected to normal panda device")
       } else {
         // Try to connect anyway but warn user
         setNormalDevice(device)
         setConnectionStep("normal")
-        setStatusMessage("Connected to device (may not be panda). Automatically entering DFU mode...")
+        setStatusMessage("Connected to device (may not be panda). Click 'Enter DFU Mode' to continue.")
         log("[v0] Connected to device, attempting to use as panda")
-
-        // Automatically trigger DFU mode entry
-        setTimeout(() => enterDfuMode(), 1000)
       }
     } catch (e: any) {
       log("[v0] Connect failed:", e?.message || String(e))
@@ -712,7 +706,7 @@ export default function Page() {
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6 relative">
       <div className="fixed bottom-4 right-4 text-xs text-muted-foreground bg-background/80 backdrop-blur-sm px-2 py-1 rounded border">
-        <div>v38</div>
+        <div>v41</div>
         <div>Sept 9 2025</div>
       </div>
 
@@ -780,16 +774,16 @@ export default function Page() {
               </span>
               Enter DFU Mode
             </CardTitle>
-            <CardDescription>Automatically entering firmware update mode</CardDescription>
+            <CardDescription>Put device into firmware update mode</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="w-full p-2 text-center text-sm text-muted-foreground border rounded">
+            <Button onClick={enterDfuMode} disabled={connectionStep !== "normal"} className="w-full">
               {connectionStep === "normal"
-                ? "Entering DFU mode..."
+                ? "Enter DFU Mode"
                 : connectionStep === "dfu-mode"
                   ? "✓ In DFU Mode"
                   : "Waiting for connection"}
-            </div>
+            </Button>
           </CardContent>
         </Card>
 
