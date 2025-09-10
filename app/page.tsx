@@ -516,56 +516,96 @@ export default function Page() {
       log("[v0] Loading SunnyPilot Basic firmware from GitHub...")
       setStatusMessage("Downloading SunnyPilot Basic firmware...")
 
-      const [pandaResponse, bootstubResponse] = await Promise.all([
-        fetch("https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-basic/panda.bin"),
-        fetch(
-          "https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-basic/bootstub.panda.bin",
-        ),
-      ])
+      try {
+        const [pandaResponse, bootstubResponse] = await Promise.all([
+          fetch("https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-basic/panda.bin"),
+          fetch(
+            "https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-basic/bootstub.panda.bin",
+          ),
+        ])
 
-      if (!pandaResponse.ok) {
-        throw new Error(`Failed to fetch panda.bin: ${pandaResponse.status} ${pandaResponse.statusText}`)
+        if (!pandaResponse.ok) {
+          if (pandaResponse.status === 404) {
+            throw new Error(
+              `SunnyPilot Basic panda.bin not found in repository. Please check if the file exists at: prebuilt-binaries/sunny-basic/panda.bin`,
+            )
+          }
+          throw new Error(`Failed to fetch panda.bin: ${pandaResponse.status} ${pandaResponse.statusText}`)
+        }
+        if (!bootstubResponse.ok) {
+          if (bootstubResponse.status === 404) {
+            throw new Error(
+              `SunnyPilot Basic bootstub.panda.bin not found in repository. Please check if the file exists at: prebuilt-binaries/sunny-basic/bootstub.panda.bin`,
+            )
+          }
+          throw new Error(
+            `Failed to fetch bootstub.panda.bin: ${bootstubResponse.status} ${bootstubResponse.statusText}`,
+          )
+        }
+
+        const pandaBuffer = await pandaResponse.arrayBuffer()
+        const bootstubBuffer = await bootstubResponse.arrayBuffer()
+
+        log(`[v0] Downloaded panda.bin (${pandaBuffer.byteLength} bytes)`)
+        log(`[v0] Downloaded bootstub.panda.bin (${bootstubBuffer.byteLength} bytes)`)
+
+        return { pandaBuffer, bootstubBuffer }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error)
+        if (errorMsg.includes("not found in repository")) {
+          log("[v0] 💡 Suggestion: Try using 'Upload Custom Files' option instead")
+          setStatusMessage(`${errorMsg}. Try using 'Upload Custom Files' option instead.`)
+        }
+        throw error
       }
-      if (!bootstubResponse.ok) {
-        throw new Error(`Failed to fetch bootstub.panda.bin: ${bootstubResponse.status} ${bootstubResponse.statusText}`)
-      }
-
-      const pandaBuffer = await pandaResponse.arrayBuffer()
-      const bootstubBuffer = await bootstubResponse.arrayBuffer()
-
-      log(`[v0] Downloaded panda.bin (${pandaBuffer.byteLength} bytes)`)
-      log(`[v0] Downloaded bootstub.panda.bin (${bootstubBuffer.byteLength} bytes)`)
-
-      return { pandaBuffer, bootstubBuffer }
     }
 
     if (firmwareType === "sunny-advanced") {
       log("[v0] Loading SunnyPilot Advanced firmware from GitHub...")
       setStatusMessage("Downloading SunnyPilot Advanced firmware...")
 
-      const [pandaResponse, bootstubResponse] = await Promise.all([
-        fetch("https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-advanced/panda.bin"),
-        fetch(
-          "https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-advanced/bootstub.panda.bin",
-        ),
-      ])
+      try {
+        const [pandaResponse, bootstubResponse] = await Promise.all([
+          fetch("https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-advanced/panda.bin"),
+          fetch(
+            "https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-advanced/bootstub.panda.bin",
+          ),
+        ])
 
-      if (!pandaResponse.ok) {
-        throw new Error(`Failed to fetch advanced panda.bin: ${pandaResponse.status} ${pandaResponse.statusText}`)
+        if (!pandaResponse.ok) {
+          if (pandaResponse.status === 404) {
+            throw new Error(
+              `SunnyPilot Advanced panda.bin not found in repository. Please upload the file to: prebuilt-binaries/sunny-advanced/panda.bin`,
+            )
+          }
+          throw new Error(`Failed to fetch advanced panda.bin: ${pandaResponse.status} ${pandaResponse.statusText}`)
+        }
+        if (!bootstubResponse.ok) {
+          if (bootstubResponse.status === 404) {
+            throw new Error(
+              `SunnyPilot Advanced bootstub.panda.bin not found in repository. Please upload the file to: prebuilt-binaries/sunny-advanced/bootstub.panda.bin`,
+            )
+          }
+          throw new Error(
+            `Failed to fetch advanced bootstub.panda.bin: ${bootstubResponse.status} ${bootstubResponse.statusText}`,
+          )
+        }
+
+        const pandaBuffer = await pandaResponse.arrayBuffer()
+        const bootstubBuffer = await bootstubResponse.arrayBuffer()
+
+        log(`[v0] Downloaded advanced panda.bin (${pandaBuffer.byteLength} bytes)`)
+        log(`[v0] Downloaded advanced bootstub.panda.bin (${bootstubBuffer.byteLength} bytes)`)
+
+        return { pandaBuffer, bootstubBuffer }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error)
+        if (errorMsg.includes("not found in repository")) {
+          log("[v0] 💡 Suggestion: Try using 'Upload Custom Files' option instead")
+          setStatusMessage(`${errorMsg}. Try using 'Upload Custom Files' option instead.`)
+        }
+        throw error
       }
-      if (!bootstubResponse.ok) {
-        throw new Error(
-          `Failed to fetch advanced bootstub.panda.bin: ${bootstubResponse.status} ${bootstubResponse.statusText}`,
-        )
-      }
-
-      const pandaBuffer = await pandaResponse.arrayBuffer()
-      const bootstubBuffer = await bootstubResponse.arrayBuffer()
-
-      log(`[v0] Downloaded advanced panda.bin (${pandaBuffer.byteLength} bytes)`)
-      log(`[v0] Downloaded advanced bootstub.panda.bin (${bootstubBuffer.byteLength} bytes)`)
-
-      return { pandaBuffer, bootstubBuffer }
     }
 
     // Use uploaded files
@@ -763,7 +803,7 @@ export default function Page() {
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6 relative">
       <div className="fixed bottom-4 right-4 text-xs text-muted-foreground bg-background/80 backdrop-blur-sm px-2 py-1 rounded border">
-        <div>v49</div>
+        <div>v50</div>
         <div>Sept 9 2025</div>
       </div>
 
