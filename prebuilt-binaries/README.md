@@ -40,3 +40,8 @@ cd board
 ./get_sdk.sh
 make recover
 # Binaries will be in obj/ folder
+\`\`\`
+
+## Usage
+
+The web flasher automatically loads these prebuilt binaries when "SunnyPilot Basic" is selected. For manual flashing, use the "Upload Binary Files" option to select your own binaries.

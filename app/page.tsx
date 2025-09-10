@@ -319,11 +319,21 @@ export default function Page() {
   const connectNormalDevice = useCallback(async () => {
     clear()
     setStatusMessage("")
+
+    if (!navigator.usb) {
+      const errorMsg = "WebUSB not supported. Please use Chrome/Edge on HTTPS."
+      log("[v0] WebUSB not available")
+      setStatusMessage(errorMsg)
+      return
+    }
+
     try {
       const device = await navigator.usb.requestDevice({
         filters: [
           { vendorId: 0x0483, productId: 0xdf11 }, // ST DFU (already in DFU mode)
-          { vendorId: 0x0483 }, // ST devices (normal mode)
+          { vendorId: 0xbbaa, productId: 0xddcc }, // Panda normal mode
+          { vendorId: 0xbbaa }, // Comma devices
+          { vendorId: 0x0483 }, // ST devices (fallback)
         ],
       })
 
@@ -337,13 +347,29 @@ export default function Page() {
         return
       }
 
-      setNormalDevice(device)
-      setConnectionStep("normal")
-      setStatusMessage('Connected to panda device. Click "Enter DFU Mode" to continue.')
-      log("[v0] Connected to normal panda device")
+      if (device.productName?.toLowerCase().includes("panda") || device.vendorId === 0xbbaa) {
+        setNormalDevice(device)
+        setConnectionStep("normal")
+        setStatusMessage('Connected to panda device. Click "Enter DFU Mode" to continue.')
+        log("[v0] Connected to normal panda device")
+      } else {
+        // Try to connect anyway but warn user
+        setNormalDevice(device)
+        setConnectionStep("normal")
+        setStatusMessage('Connected to device (may not be panda). Click "Enter DFU Mode" to continue.')
+        log("[v0] Connected to device, attempting to use as panda")
+      }
     } catch (e: any) {
       log("[v0] Connect failed:", e?.message || String(e))
-      setStatusMessage(`Connection failed: ${e?.message || String(e)}`)
+
+      let errorMsg = `Connection failed: ${e?.message || String(e)}`
+      if (e?.message?.includes("disallowed by permissions policy")) {
+        errorMsg = "WebUSB blocked by permissions policy. Please access via HTTPS or try a different browser."
+      } else if (e?.message?.includes("No device selected")) {
+        errorMsg = "No device selected. Make sure your panda device is connected."
+      }
+
+      setStatusMessage(errorMsg)
     }
   }, [clear, log])
 
