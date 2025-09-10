@@ -316,6 +316,8 @@ export default function Page() {
   const [bootstubBin, setBootstubBin] = useState<ArrayBuffer | null>(null)
   const [statusMessage, setStatusMessage] = useState<string>("")
 
+  const [dfuButtonDisabled, setDfuButtonDisabled] = useState(false)
+
   const connectNormalDevice = useCallback(async () => {
     clear()
     setStatusMessage("")
@@ -375,6 +377,9 @@ export default function Page() {
 
   const enterDfuMode = useCallback(async () => {
     if (!normalDevice) return
+
+    setDfuButtonDisabled(true)
+    setTimeout(() => setDfuButtonDisabled(false), 5000)
 
     try {
       setStatusMessage("Entering DFU mode...")
@@ -499,6 +504,13 @@ export default function Page() {
     log("[v0] Disconnected.")
   }, [dfuDevice, normalDevice, log])
 
+  const isFirmwareReady = useCallback(() => {
+    if (firmwareType === "sunny-basic" || firmwareType === "sunny-advanced") {
+      return true // Prebuilt options don't need uploaded files
+    }
+    return pandaBin && bootstubBin // Upload option requires both files
+  }, [firmwareType, pandaBin, bootstubBin])
+
   const loadFirmware = useCallback(async () => {
     if (firmwareType === "sunny-basic") {
       log("[v0] Loading SunnyPilot Basic firmware from GitHub...")
@@ -618,6 +630,11 @@ export default function Page() {
       return
     }
 
+    if (!isFirmwareReady()) {
+      setStatusMessage("Please upload both panda.bin and bootstub.panda.bin files")
+      return
+    }
+
     try {
       setStatusMessage("Loading firmware...")
       const { pandaBuffer, bootstubBuffer } = await loadFirmware()
@@ -713,7 +730,7 @@ export default function Page() {
 
       log("[v0] Flash error:", errorMsg)
     }
-  }, [dfuDevice, loadFirmware, log, writeWithFallback])
+  }, [dfuDevice, loadFirmware, log, writeWithFallback, isFirmwareReady])
 
   const onPickFiles = async (ev: React.ChangeEvent<HTMLInputElement>) => {
     const files = ev.currentTarget.files
@@ -746,7 +763,7 @@ export default function Page() {
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6 relative">
       <div className="fixed bottom-4 right-4 text-xs text-muted-foreground bg-background/80 backdrop-blur-sm px-2 py-1 rounded border">
-        <div>v48</div>
+        <div>v49</div>
         <div>Sept 9 2025</div>
       </div>
 
@@ -879,9 +896,15 @@ export default function Page() {
             <CardDescription>Put device into firmware update mode</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={enterDfuMode} disabled={connectionStep !== "normal"} className="w-full">
+            <Button
+              onClick={enterDfuMode}
+              disabled={connectionStep !== "normal" || dfuButtonDisabled}
+              className="w-full"
+            >
               {connectionStep === "normal"
-                ? "Enter DFU Mode"
+                ? dfuButtonDisabled
+                  ? "Entering DFU Mode..."
+                  : "Enter DFU Mode"
                 : connectionStep === "dfu-mode"
                   ? "✓ In DFU Mode"
                   : "Waiting for connection"}
@@ -937,7 +960,7 @@ export default function Page() {
             </div>
 
             <div className="flex gap-2">
-              <Button onClick={flash} disabled={!pandaBin || !bootstubBin} className="flex-1">
+              <Button onClick={flash} disabled={!isFirmwareReady()} className="flex-1">
                 Flash Firmware
               </Button>
               <Button onClick={disconnect} variant="outline">
