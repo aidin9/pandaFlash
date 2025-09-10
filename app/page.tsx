@@ -389,9 +389,9 @@ export default function Page() {
       await normalDevice.open()
 
       let success = false
-      for (let attempt = 1; attempt <= 2; attempt++) {
+      for (let attempt = 1; attempt <= 3; attempt++) {
         try {
-          log(`[v0] DFU mode attempt ${attempt}/2...`)
+          log(`[v0] DFU mode attempt ${attempt}/3...`)
 
           // Send recover command (vendor-specific control transfer)
           const result = await normalDevice.controlTransferOut({
@@ -409,7 +409,7 @@ export default function Page() {
           }
         } catch (error: any) {
           log(`[v0] DFU mode attempt ${attempt} error:`, error.message)
-          if (attempt === 2 || error.message.includes("disconnected")) {
+          if (attempt === 3 || error.message.includes("disconnected")) {
             // If disconnected, that's actually success
             if (error.message.includes("disconnected")) {
               success = true
@@ -417,8 +417,13 @@ export default function Page() {
             break
           }
           // Wait a bit before retry
-          await new Promise((resolve) => setTimeout(resolve, 500))
+          await new Promise((resolve) => setTimeout(resolve, 2000))
         }
+      }
+
+      if (success) {
+        log("[v0] Waiting for device to fully enter DFU mode...")
+        await new Promise((resolve) => setTimeout(resolve, 3000))
       }
 
       // Device will disconnect when entering DFU mode
@@ -445,7 +450,9 @@ export default function Page() {
         )
         log("[v0] Device disconnected (expected) - now in DFU mode")
       } else {
-        setStatusMessage(`Failed to enter DFU mode: ${error.message}`)
+        setStatusMessage(
+          `Failed to enter DFU mode: ${error.message}. Try disconnecting and reconnecting the device, then try again.`,
+        )
       }
     }
   }, [normalDevice, log])
@@ -705,7 +712,7 @@ export default function Page() {
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6 relative">
       <div className="fixed bottom-4 right-4 text-xs text-muted-foreground bg-background/80 backdrop-blur-sm px-2 py-1 rounded border">
-        <div>v1.0.0</div>
+        <div>v38</div>
         <div>Dec 2024</div>
       </div>
 
