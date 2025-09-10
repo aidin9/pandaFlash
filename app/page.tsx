@@ -696,7 +696,7 @@ export default function Page() {
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6 relative">
       <div className="fixed bottom-4 right-4 text-xs text-muted-foreground bg-background/80 backdrop-blur-sm px-2 py-1 rounded border">
-        <div>v45</div>
+        <div>v47</div>
         <div>Sept 9 2025</div>
       </div>
 
@@ -740,7 +740,7 @@ export default function Page() {
               </p>
               <div className="grid gap-2">
                 <a
-                  href="https://github.com/sunnyhaibin/panda/releases/latest/download/panda.bin"
+                  href="https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-basic/panda.bin"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
@@ -755,7 +755,7 @@ export default function Page() {
                   Download panda.bin
                 </a>
                 <a
-                  href="https://github.com/sunnyhaibin/panda/releases/latest/download/bootstub.panda.bin"
+                  href="https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-basic/bootstub.panda.bin"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
@@ -781,7 +781,7 @@ export default function Page() {
               </p>
               <div className="grid gap-2">
                 <a
-                  href="https://github.com/sunnyhaibin/panda/releases/latest/download/panda_h7.bin"
+                  href="https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-advanced/panda.bin"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors text-sm"
@@ -793,10 +793,10 @@ export default function Page() {
                       clipRule="evenodd"
                     />
                   </svg>
-                  Download panda_h7.bin
+                  Download panda.bin
                 </a>
                 <a
-                  href="https://github.com/sunnyhaibin/panda/releases/latest/download/bootstub.panda_h7.bin"
+                  href="https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-advanced/bootstub.panda.bin"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors text-sm"
@@ -808,7 +808,7 @@ export default function Page() {
                       clipRule="evenodd"
                     />
                   </svg>
-                  Download bootstub.panda_h7.bin
+                  Download bootstub.panda.bin
                 </a>
               </div>
             </div>
