@@ -713,7 +713,7 @@ export default function Page() {
     <div className="max-w-4xl mx-auto p-6 space-y-6 relative">
       <div className="fixed bottom-4 right-4 text-xs text-muted-foreground bg-background/80 backdrop-blur-sm px-2 py-1 rounded border">
         <div>v38</div>
-        <div>Dec 2024</div>
+        <div>Sept 9 2025</div>
       </div>
 
       <Alert className="border-red-500 bg-red-50 text-red-900">
