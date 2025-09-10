@@ -500,10 +500,60 @@ export default function Page() {
   }, [dfuDevice, normalDevice, log])
 
   const loadFirmware = useCallback(async () => {
-    if (firmwareType === "sunny-basic" || firmwareType === "sunny-advanced") {
-      throw new Error(
-        "Please download the firmware files using the links above, then upload them using the file picker.",
-      )
+    if (firmwareType === "sunny-basic") {
+      log("[v0] Loading SunnyPilot Basic firmware from GitHub...")
+      setStatusMessage("Downloading SunnyPilot Basic firmware...")
+
+      const [pandaResponse, bootstubResponse] = await Promise.all([
+        fetch("https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-basic/panda.bin"),
+        fetch(
+          "https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-basic/bootstub.panda.bin",
+        ),
+      ])
+
+      if (!pandaResponse.ok) {
+        throw new Error(`Failed to fetch panda.bin: ${pandaResponse.status} ${pandaResponse.statusText}`)
+      }
+      if (!bootstubResponse.ok) {
+        throw new Error(`Failed to fetch bootstub.panda.bin: ${bootstubResponse.status} ${bootstubResponse.statusText}`)
+      }
+
+      const pandaBuffer = await pandaResponse.arrayBuffer()
+      const bootstubBuffer = await bootstubResponse.arrayBuffer()
+
+      log(`[v0] Downloaded panda.bin (${pandaBuffer.byteLength} bytes)`)
+      log(`[v0] Downloaded bootstub.panda.bin (${bootstubBuffer.byteLength} bytes)`)
+
+      return { pandaBuffer, bootstubBuffer }
+    }
+
+    if (firmwareType === "sunny-advanced") {
+      log("[v0] Loading SunnyPilot Advanced firmware from GitHub...")
+      setStatusMessage("Downloading SunnyPilot Advanced firmware...")
+
+      const [pandaResponse, bootstubResponse] = await Promise.all([
+        fetch("https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-advanced/panda.bin"),
+        fetch(
+          "https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-advanced/bootstub.panda.bin",
+        ),
+      ])
+
+      if (!pandaResponse.ok) {
+        throw new Error(`Failed to fetch advanced panda.bin: ${pandaResponse.status} ${pandaResponse.statusText}`)
+      }
+      if (!bootstubResponse.ok) {
+        throw new Error(
+          `Failed to fetch advanced bootstub.panda.bin: ${bootstubResponse.status} ${bootstubResponse.statusText}`,
+        )
+      }
+
+      const pandaBuffer = await pandaResponse.arrayBuffer()
+      const bootstubBuffer = await bootstubResponse.arrayBuffer()
+
+      log(`[v0] Downloaded advanced panda.bin (${pandaBuffer.byteLength} bytes)`)
+      log(`[v0] Downloaded advanced bootstub.panda.bin (${bootstubBuffer.byteLength} bytes)`)
+
+      return { pandaBuffer, bootstubBuffer }
     }
 
     // Use uploaded files
@@ -696,7 +746,7 @@ export default function Page() {
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6 relative">
       <div className="fixed bottom-4 right-4 text-xs text-muted-foreground bg-background/80 backdrop-blur-sm px-2 py-1 rounded border">
-        <div>v47</div>
+        <div>v48</div>
         <div>Sept 9 2025</div>
       </div>
 
@@ -734,83 +784,19 @@ export default function Page() {
 
           {firmwareType === "sunny-basic" && (
             <div className="space-y-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <h3 className="font-semibold text-blue-900">SunnyPilot Basic - Download Required Files</h3>
+              <h3 className="font-semibold text-blue-900">SunnyPilot Basic</h3>
               <p className="text-sm text-blue-700">
-                Download both files below, then upload them using the file picker:
+                This will automatically download and flash the SunnyPilot Basic firmware from the repository.
               </p>
-              <div className="grid gap-2">
-                <a
-                  href="https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-basic/panda.bin"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
-                >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  Download panda.bin
-                </a>
-                <a
-                  href="https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-basic/bootstub.panda.bin"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
-                >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  Download bootstub.panda.bin
-                </a>
-              </div>
             </div>
           )}
 
           {firmwareType === "sunny-advanced" && (
             <div className="space-y-3 p-4 bg-purple-50 rounded-lg border border-purple-200">
-              <h3 className="font-semibold text-purple-900">SunnyPilot Advanced - Download Required Files</h3>
+              <h3 className="font-semibold text-purple-900">SunnyPilot Advanced</h3>
               <p className="text-sm text-purple-700">
-                Download both files below, then upload them using the file picker:
+                This will automatically download and flash the SunnyPilot Advanced firmware from the repository.
               </p>
-              <div className="grid gap-2">
-                <a
-                  href="https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-advanced/panda.bin"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors text-sm"
-                >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  Download panda.bin
-                </a>
-                <a
-                  href="https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-advanced/bootstub.panda.bin"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors text-sm"
-                >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  Download bootstub.panda.bin
-                </a>
-              </div>
             </div>
           )}
 
