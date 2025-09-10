@@ -504,8 +504,8 @@ export default function Page() {
       try {
         log("[v0] Loading SunnyPilot Basic firmware...")
 
-        const pandaUrl = "/pandaFlash/prebuilt-binaries/sunny-basic/panda.bin"
-        const bootstubUrl = "/pandaFlash/prebuilt-binaries/sunny-basic/bootstub.panda.bin"
+        const pandaUrl = "/pandaFlash/panda.bin"
+        const bootstubUrl = "/pandaFlash/bootstub.panda.bin"
 
         log(`[v0] Fetching panda.bin from: ${pandaUrl}`)
         log(`[v0] Fetching bootstub.panda.bin from: ${bootstubUrl}`)
@@ -746,7 +746,7 @@ export default function Page() {
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6 relative">
       <div className="fixed bottom-4 right-4 text-xs text-muted-foreground bg-background/80 backdrop-blur-sm px-2 py-1 rounded border">
-        <div>v43</div>
+        <div>v44</div>
         <div>Sept 9 2025</div>
       </div>
 
