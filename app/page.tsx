@@ -371,7 +371,6 @@ export default function Page() {
   const [statusMessage, setStatusMessage] = useState<string>("")
 
   const [dfuButtonDisabled, setDfuButtonDisabled] = useState(false)
-  const [canManualFlash, setCanManualFlash] = useState(false)
 
   const connectNormalDevice = useCallback(async () => {
     clear()
@@ -492,7 +491,7 @@ export default function Page() {
       setStatusMessage(
         'Device entered DFU mode successfully! LED should be solid green. Click "Connect DFU Device" to continue.',
       )
-      log("[v0] 🎉 Device should now be in DFU mode (solid green LED)")
+      log("[v0] Device should now be in DFU mode (solid green LED)")
     } catch (error: any) {
       log("[v0] DFU mode entry error:", error.message)
       // Even if we get a disconnect error, the device likely entered DFU mode
@@ -502,7 +501,7 @@ export default function Page() {
         setStatusMessage(
           'Device entered DFU mode successfully! LED should be solid green. Click "Connect DFU Device" to continue.',
         )
-        log("[v0] 💡 Device disconnected (expected) - now in DFU mode")
+        log("[v0] Device disconnected (expected) - now in DFU mode")
       } else {
         setStatusMessage(
           `Failed to enter DFU mode: ${error.message}. Try disconnecting and reconnecting the device, then try again.`,
@@ -512,21 +511,13 @@ export default function Page() {
   }, [normalDevice, log])
 
   const connectDfuDevice = useCallback(async () => {
-    if (!navigator.usb) {
-      const errorMsg = "WebUSB not supported. Please use Chrome/Edge on HTTPS."
-      log("[v0] WebUSB not available")
-      setStatusMessage(errorMsg)
-      return
-    }
-
     try {
       setStatusMessage("Connecting to DFU device...")
-      log("[v0] Attempting to connect to DFU device...")
 
-      // Request DFU device specifically
       const device = await navigator.usb.requestDevice({
         filters: [
-          { vendorId: 0x0483, productId: 0xdf11 }, // ST DFU mode
+          { vendorId: 0x0483, productId: 0xdf11 }, // ST DFU (DFUSe)
+          { classCode: 0xfe, subclassCode: 0x01 }, // DFU class
         ],
       })
 
@@ -534,7 +525,7 @@ export default function Page() {
 
       const dfuIfs = findDfuInterfaces(device)
       if (dfuIfs.length === 0) {
-        throw new Error("No DFU interfaces found")
+        throw new Error("No DFU (protocol 2) interface found. Device may not be in DFU mode.")
       }
 
       const settings = dfuIfs[0]
@@ -546,38 +537,8 @@ export default function Page() {
 
       setDfuDevice(dev)
       setConnectionStep("dfu-connected")
-      setStatusMessage("DFU device connected successfully! Starting firmware flash...")
+      setStatusMessage("DFU device connected successfully! Ready to flash firmware.")
       log("[v0] DFU device opened successfully")
-
-      setCanManualFlash(true)
-
-      const tryAutoFlash = async () => {
-        let attempts = 0
-        while (attempts < 3) {
-          attempts++
-          log(`[v0] Auto-flash attempt ${attempts}/3`)
-
-          if (isFirmwareReady()) {
-            try {
-              await flash()
-              break
-            } catch (error) {
-              log(`[v0] Auto-flash attempt ${attempts} failed:`, error)
-              if (attempts < 3) {
-                await new Promise((resolve) => setTimeout(resolve, 2000)) // Retry after 2 seconds
-              } else {
-                setStatusMessage("Auto-flash failed. Please use the manual flash button to retry.")
-              }
-            }
-          } else {
-            log("[v0] Firmware not ready for auto-flash")
-            setStatusMessage("Firmware not ready. Please select firmware and try manual flash.")
-            break
-          }
-        }
-      }
-
-      setTimeout(tryAutoFlash, 1500) // Initial delay of 1.5 seconds
     } catch (e: any) {
       log("[v0] DFU connect failed:", e?.message || String(e))
       setStatusMessage(`DFU connection failed: ${e?.message || String(e)}`)
@@ -719,8 +680,6 @@ export default function Page() {
       return
     }
 
-    setCanManualFlash(false)
-
     try {
       setStatusMessage("Loading firmware...")
       const { pandaBuffer, bootstubBuffer } = await loadFirmware()
@@ -807,16 +766,21 @@ export default function Page() {
         log("[v0] 💡 DFU exit failed (normal) - device should reboot automatically")
       }
 
-      setStatusMessage("✅ Firmware flashed successfully!")
-      log("[v0] ✅ Firmware flash completed successfully!")
+      setStatusMessage("✅ Flash completed successfully! Device should reboot automatically.")
+      log("[v0] 🎉 FLASH COMPLETE! Both panda.bin and bootstub.panda.bin written successfully")
+      log("[v0] 🔄 Device should now reboot and exit DFU mode automatically")
+    } catch (e: any) {
+      const errorMsg = e?.message || String(e)
+      log(`[v0] ❌ Flash failed: ${errorMsg}`)
 
-      setCanManualFlash(true)
-    } catch (error: any) {
-      const errorMsg = `Flash error: ${error.message}`
-      setStatusMessage(errorMsg)
-      log("[v0] Flash error:", error)
-
-      setCanManualFlash(true)
+      if (errorMsg.includes("timed out")) {
+        setStatusMessage(`⏱️ Flash failed: Operation timed out. Try disconnecting and reconnecting the device.`)
+      } else if (errorMsg.includes("disconnected")) {
+        setStatusMessage(`⚠️ Device disconnected during flash. Check if device rebooted successfully.`)
+        log("[v0] 💡 Disconnection might indicate successful completion - check device status")
+      } else {
+        setStatusMessage(`❌ Flash failed: ${errorMsg}`)
+      }
     }
   }, [dfuDevice, loadFirmware, log, isFirmwareReady])
 
@@ -850,9 +814,9 @@ export default function Page() {
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6 relative">
-      <div className="fixed bottom-4 right-4 text-xs text-muted-foreground bg-background/80 backdrop-blur-sm px-2 py-1 rounded border">
-        <div>v54</div>
-        <div>Sept 9 2025</div>
+      <div className="fixed bottom-4 right-4 bg-gray-100 dark:bg-gray-800 p-2 rounded text-xs text-gray-600 dark:text-gray-400">
+        <div>Version 0.64</div>
+        <div>Sept 11 2025</div>
       </div>
 
       <Alert className="border-red-500 bg-red-50 text-red-900">
@@ -869,7 +833,7 @@ export default function Page() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Select Firmware</CardTitle>
+          <CardTitle>Step 1: Select Firmware</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-3">
@@ -941,7 +905,8 @@ export default function Page() {
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         strokeWidth="2"
-                        d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"
+                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                        clipRule="evenodd"
                       />
                     </svg>
                     <p className="mb-2 text-sm text-muted-foreground">
@@ -1020,40 +985,38 @@ export default function Page() {
               <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-sm flex items-center justify-center">
                 3
               </span>
-              Connect DFU & Flash
+              Connect DFU
             </CardTitle>
-            <CardDescription>Connect to device in DFU mode - flashing will start automatically</CardDescription>
+            <CardDescription>Connect to device in DFU mode</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent>
             <Button onClick={connectDfuDevice} disabled={connectionStep !== "dfu-mode"} className="w-full">
-              {connectionStep === "dfu-connected" ? "✓ DFU Connected" : "Connect DFU Device & Flash"}
+              {connectionStep === "dfu-connected" ? "✓ DFU Connected" : "Connect DFU Device"}
             </Button>
-
-            {connectionStep === "dfu-connected" && (
-              <Button
-                onClick={flash}
-                disabled={!canManualFlash || !isFirmwareReady()}
-                variant="outline"
-                className="w-full bg-transparent"
-              >
-                {canManualFlash ? "Manual Flash (Retry)" : "Flashing..."}
-              </Button>
-            )}
           </CardContent>
         </Card>
       </div>
 
       {/* Status and Progress */}
       {statusMessage && (
-        <Alert className="border-2 border-primary/20 bg-primary/5">
-          <AlertDescription className="text-base font-medium text-center py-2">{statusMessage}</AlertDescription>
+        <Alert className="bg-blue-50 border-blue-200 text-blue-800 text-lg font-medium py-4">
+          <AlertDescription className="text-center">{statusMessage}</AlertDescription>
         </Alert>
       )}
 
       {connectionStep === "dfu-connected" && (
         <Card>
           <CardHeader>
-            <CardTitle>Flashing Progress</CardTitle>
+            <CardTitle>Flash Firmware</CardTitle>
+            <CardDescription>
+              Ready to flash{" "}
+              {firmwareType === "sunny-basic"
+                ? "SunnyPilot Basic"
+                : firmwareType === "sunny-advanced"
+                  ? "SunnyPilot Advanced"
+                  : "uploaded"}{" "}
+              firmware
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -1064,7 +1027,10 @@ export default function Page() {
             </div>
 
             <div className="flex gap-2">
-              <Button onClick={disconnect} variant="outline" className="flex-1 bg-transparent">
+              <Button onClick={flash} disabled={!isFirmwareReady()} className="flex-1">
+                Flash Firmware
+              </Button>
+              <Button onClick={disconnect} variant="outline">
                 Disconnect
               </Button>
             </div>
@@ -1114,7 +1080,6 @@ export default function Page() {
           </CardContent>
         </Card>
       )}
-      <div className="text-center text-sm text-muted-foreground mt-8">Version 0.62</div>
     </div>
   )
 }
