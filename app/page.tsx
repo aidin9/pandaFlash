@@ -491,7 +491,7 @@ export default function Page() {
       setStatusMessage(
         'Device entered DFU mode successfully! LED should be solid green. Click "Connect DFU Device" to continue.',
       )
-      log("[v0] Device should now be in DFU mode (solid green LED)")
+      log("[v0] 🎉 Device should now be in DFU mode (solid green LED)")
     } catch (error: any) {
       log("[v0] DFU mode entry error:", error.message)
       // Even if we get a disconnect error, the device likely entered DFU mode
@@ -501,7 +501,7 @@ export default function Page() {
         setStatusMessage(
           'Device entered DFU mode successfully! LED should be solid green. Click "Connect DFU Device" to continue.',
         )
-        log("[v0] Device disconnected (expected) - now in DFU mode")
+        log("[v0] 💡 Device disconnected (expected) - now in DFU mode")
       } else {
         setStatusMessage(
           `Failed to enter DFU mode: ${error.message}. Try disconnecting and reconnecting the device, then try again.`,
@@ -511,12 +511,25 @@ export default function Page() {
   }, [normalDevice, log])
 
   const connectDfuDevice = useCallback(async () => {
-    const device = normalDevice
-    if (!device) return
+    if (!navigator.usb) {
+      const errorMsg = "WebUSB not supported. Please use Chrome/Edge on HTTPS."
+      log("[v0] WebUSB not available")
+      setStatusMessage(errorMsg)
+      return
+    }
 
     try {
       setStatusMessage("Connecting to DFU device...")
       log("[v0] Attempting to connect to DFU device...")
+
+      // Request DFU device specifically
+      const device = await navigator.usb.requestDevice({
+        filters: [
+          { vendorId: 0x0483, productId: 0xdf11 }, // ST DFU mode
+        ],
+      })
+
+      log("[v0] Found DFU device:", device.productName || "STM32 BOOTLOADER")
 
       const dfuIfs = findDfuInterfaces(device)
       if (dfuIfs.length === 0) {
@@ -985,13 +998,13 @@ export default function Page() {
               <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-sm flex items-center justify-center">
                 3
               </span>
-              Connect DFU
+              Connect DFU & Flash
             </CardTitle>
-            <CardDescription>Connect to device in DFU mode</CardDescription>
+            <CardDescription>Connect to device in DFU mode - flashing will start automatically</CardDescription>
           </CardHeader>
           <CardContent>
             <Button onClick={connectDfuDevice} disabled={connectionStep !== "dfu-mode"} className="w-full">
-              {connectionStep === "dfu-connected" ? "✓ DFU Connected" : "Connect DFU Device"}
+              {connectionStep === "dfu-connected" ? "✓ DFU Connected" : "Connect DFU Device & Flash"}
             </Button>
           </CardContent>
         </Card>
@@ -999,8 +1012,8 @@ export default function Page() {
 
       {/* Status and Progress */}
       {statusMessage && (
-        <Alert>
-          <AlertDescription>{statusMessage}</AlertDescription>
+        <Alert className="border-2 border-primary/20 bg-primary/5">
+          <AlertDescription className="text-base font-medium text-center py-2">{statusMessage}</AlertDescription>
         </Alert>
       )}
 
@@ -1068,6 +1081,7 @@ export default function Page() {
           </CardContent>
         </Card>
       )}
+      <div className="text-center text-sm text-muted-foreground mt-8">Version 0.61</div>
     </div>
   )
 }
