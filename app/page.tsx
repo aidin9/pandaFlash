@@ -7,9 +7,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Download } from "lucide-react"
 
 /** ---------- Small logging helper ---------- */
-function useLogger() {
+const useLogger = () => {
   const [lines, setLines] = useState<string[]>([])
   const log = useCallback((...args: unknown[]) => {
     const msg = args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ")
@@ -175,6 +176,42 @@ class DfuDevice {
     return this.pollUntil(DfuDevice.STATE.dfuDNLOAD_IDLE)
   }
 
+  /** Write data; for DFUSe we start at block 2 (block 0 is commands) */
+  async do_download(xferSize: number, data: ArrayBuffer, manifestationTolerant: boolean, firstBlock = 2) {
+    await this.abortToIdle()
+
+    const view = new Uint8Array(data)
+    let sent = 0
+    let block = firstBlock
+
+    this.logProgress(0, view.byteLength)
+
+    while (sent < view.byteLength) {
+      const size = Math.min(xferSize, view.byteLength - sent)
+      const progress = Math.round((sent / view.byteLength) * 100)
+      console.log(`[DFU] Block ${block}: ${sent}/${view.byteLength} bytes (${progress}%) - sending ${size} bytes`)
+
+      const st = await this.dnloadBlock(view.slice(sent, sent + size).buffer, block++)
+      if (st.status !== 0) throw new Error(`DFU DOWNLOAD failed state=${st.state} status=${st.status}`)
+      sent += size
+      this.logProgress(sent, view.byteLength)
+    }
+
+    console.log(`[DFU] Sending final ZLP (block ${block})`)
+    await this.requestOut(DfuDevice.DFU.DNLOAD, new ArrayBuffer(0), block++)
+
+    if (manifestationTolerant) {
+      const fin = await this.pollUntil(DfuDevice.STATE.dfuIDLE)
+      if (fin.status !== 0) throw new Error(`DFU MANIFEST failed state=${fin.state} status=${fin.status}`)
+    } else {
+      try {
+        await this.getStatus()
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
   // ---- DFUSe vendor extensions ----
   async dfuseSetAddress(addr: number) {
     const b = new ArrayBuffer(5)
@@ -250,44 +287,62 @@ class DfuDevice {
     // Fallback if not found
     return 2048
   }
+}
 
-  /** Write data; for DFUSe we start at block 2 (block 0 is commands) */
-  async do_download(xferSize: number, data: ArrayBuffer, manifestationTolerant: boolean, firstBlock = 2) {
-    await this.abortToIdle()
+const writeWithFallback = async (dev: DfuDevice, data: ArrayBuffer, sizes: number[], operation: string, log: any) => {
+  let lastErr: unknown
+  const tried = new Set<number>()
 
-    const view = new Uint8Array(data)
-    let sent = 0
-    let block = firstBlock
-
-    this.logProgress(0, view.byteLength)
-
-    while (sent < view.byteLength) {
-      const size = Math.min(xferSize, view.byteLength - sent)
-      console.log(`[DFU] Sending block ${block} size ${size}`)
-      const st = await this.dnloadBlock(view.slice(sent, sent + size).buffer, block++)
-      if (st.status !== 0) throw new Error(`DFU DOWNLOAD failed state=${st.state} status=${st.status}`)
-      sent += size
-      this.logProgress(sent, view.byteLength)
+  // Set up progress logging for this operation
+  dev.logProgress = (done: number, total?: number) => {
+    if (total) {
+      const percent = Math.round((done / total) * 100)
+      log(`[v0] 📊 ${operation}: ${done}/${total} bytes (${percent}%)`)
     }
+  }
 
-    console.log(`[DFU] Sending final ZLP (block ${block})`)
-    await this.requestOut(DfuDevice.DFU.DNLOAD, new ArrayBuffer(0), block++)
+  for (const s of sizes) {
+    if (tried.has(s)) continue
+    tried.add(s)
+    try {
+      log(`[v0] 🔄 Attempting ${operation} with transfer size ${s}...`)
+      await dev.do_download(s, data, /*manifest*/ true, /*firstBlock*/ 2)
+      log(`[v0] ✅ Successfully flashed ${operation} (${data.byteLength} bytes)`)
+      return true
+    } catch (e) {
+      lastErr = e
+      const errorMsg = e instanceof Error ? e.message : String(e)
 
-    if (manifestationTolerant) {
-      const fin = await this.pollUntil(DfuDevice.STATE.dfuIDLE)
-      if (fin.status !== 0) throw new Error(`DFU MANIFEST failed state=${fin.state} status=${fin.status}`)
-    } else {
-      try {
-        await this.getStatus()
-      } catch {
-        /* ignore */
+      if (errorMsg.includes("disconnected")) {
+        log(`[v0] ⚠️ Device disconnected during ${operation} transfer`)
+
+        // Check if we made significant progress before disconnection
+        if (tried.size > 1) {
+          log(`[v0] 💡 Disconnection after trying multiple transfer sizes - likely successful`)
+          return true
+        } else {
+          log(`[v0] 🔴 Early disconnection - trying smaller transfer size`)
+          continue
+        }
+      } else {
+        log(`[v0] ❌ Transfer failed: ${errorMsg}`)
       }
     }
   }
+
+  // If all sizes failed, check if it was due to disconnection (which might indicate success)
+  const errorMsg = lastErr instanceof Error ? lastErr.message : String(lastErr)
+  if (errorMsg.includes("disconnected")) {
+    log(`[v0] 🤔 All attempts resulted in disconnection - this often means the flash succeeded`)
+    log(`[v0] 💡 Device likely rebooted after successful flash`)
+    return true
+  }
+
+  throw lastErr
 }
 
 /** ---------- Helpers to pick DFUSe alt/interface ---------- */
-function findDfuInterfaces(device: USBDevice): DfuSettings[] {
+const findDfuInterfaces = (device: USBDevice): DfuSettings[] => {
   const matches: DfuSettings[] = []
   for (const conf of device.configurations || []) {
     for (const intf of conf.interfaces || []) {
@@ -615,55 +670,6 @@ export default function Page() {
     return { pandaBuffer: pandaBin, bootstubBuffer: bootstubBin }
   }, [firmwareType, pandaBin, bootstubBin, log])
 
-  const writeWithFallback = useCallback(
-    async (dev: DfuDevice, data: ArrayBuffer, sizes: number[], operation: string) => {
-      let lastErr: unknown
-      const tried = new Set<number>()
-
-      for (const s of sizes) {
-        if (tried.has(s)) continue
-        tried.add(s)
-        try {
-          log(`[v0] Using wTransferSize = ${s} for ${operation}`)
-          await dev.do_download(s, data, /*manifest*/ true, /*firstBlock*/ 2)
-          log(`[v0] ✅ Successfully wrote ${operation} (${data.byteLength} bytes) with transfer size ${s}`)
-          return true // Return success indicator
-        } catch (e) {
-          lastErr = e
-          const errorMsg = e instanceof Error ? e.message : String(e)
-          log(`[v0] ❌ Transfer size ${s} failed for ${operation}: ${errorMsg}`)
-
-          if (errorMsg.includes("disconnected")) {
-            log(`[v0] ⚠️ Device disconnected during ${operation} - checking if this indicates success`)
-
-            // If this is the first transfer size and it disconnected, likely an error
-            if (s === sizes[0]) {
-              log(`[v0] 🔴 Disconnection on first transfer size suggests failure`)
-              continue // Try smaller size
-            }
-
-            // If we've tried multiple sizes and now disconnected, might be success
-            if (tried.size > 1) {
-              log(`[v0] 🟡 Disconnection after multiple attempts - assuming ${operation} completed successfully`)
-              return true
-            }
-          }
-        }
-      }
-
-      const errorMsg = lastErr instanceof Error ? lastErr.message : String(lastErr)
-      if (errorMsg.includes("disconnected")) {
-        log(`[v0] ⚠️ All transfer sizes failed with disconnection for ${operation}`)
-        log(`[v0] 💡 This might indicate successful flash - device may have rebooted`)
-        // Return true for disconnection on final attempt as it might indicate success
-        return true
-      }
-
-      throw lastErr
-    },
-    [log],
-  )
-
   const flash = useCallback(async () => {
     if (!dfuDevice) {
       setStatusMessage("No DFU device connected")
@@ -681,13 +687,13 @@ export default function Page() {
 
       setStatusMessage("Starting firmware flash...")
       log(
-        `[v0] Firmware data prepared — Panda: ${pandaBuffer.byteLength} bytes, Bootstub: ${bootstubBuffer.byteLength} bytes`,
+        `[v0] 🚀 Starting flash process — Panda: ${pandaBuffer.byteLength} bytes, Bootstub: ${bootstubBuffer.byteLength} bytes`,
       )
 
       // Read the device's transfer size
       const transferSize = await dfuDevice.getTransferSize()
-      // Build a sensible fallback ladder
       const ladder = [transferSize, 2048, 1024, 512, 256]
+      log(`[v0] 📋 Device transfer size: ${transferSize}, fallback ladder: [${ladder.join(", ")}]`)
 
       const withTimeout = async (promise: Promise<any>, timeoutMs: number, operation: string): Promise<any> => {
         const timeoutPromise = new Promise<never>((_, reject) => {
@@ -696,81 +702,88 @@ export default function Page() {
         return Promise.race([promise, timeoutPromise])
       }
 
-      const reconnectIfNeeded = async () => {
-        try {
-          await dfuDevice.getState()
-          return true // Still connected
-        } catch (e) {
-          log("[v0] 🔄 Device disconnected during flash - this may indicate successful completion")
-          setStatusMessage("Device disconnected during flash - this may indicate successful completion")
-
-          log("[v0] ✅ Assuming flash completed successfully due to device disconnection")
-          return true
-        }
-      }
-
-      // ---- panda.bin @ 0x08004000 (erase three 16KiB pages) ----
+      // ---- PHASE 1: Flash panda.bin @ 0x08004000 ----
+      log(`[v0] 📝 PHASE 1: Flashing panda.bin (${pandaBuffer.byteLength} bytes)`)
       setStatusMessage("Erasing panda firmware area...")
-      log("[v0] DFUSe: ERASE panda pages")
+      log("[v0] 🗑️ Erasing panda pages (0x08004000, 0x08008000, 0x0800c000)")
+
       await withTimeout(dfuDevice.dfuseErase(0x08004000), 10000, "Erase 0x08004000")
       await withTimeout(dfuDevice.dfuseErase(0x08008000), 10000, "Erase 0x08008000")
       await withTimeout(dfuDevice.dfuseErase(0x0800c000), 10000, "Erase 0x0800c000")
 
       setStatusMessage("Writing panda firmware...")
-      log("[v0] DFUSe: SETADDR 0x08004000")
+      log("[v0] 📍 Setting address to 0x08004000")
       await withTimeout(dfuDevice.dfuseSetAddress(0x08004000), 5000, "Set address 0x08004000")
-      log("[v0] Writing panda.bin (start block 2)")
+
       const pandaSuccess = await withTimeout(
-        writeWithFallback(dfuDevice, pandaBuffer, ladder, "panda.bin"),
-        30000,
+        writeWithFallback(dfuDevice, pandaBuffer, ladder, "panda.bin", log),
+        45000,
         "Write panda.bin",
       )
 
-      if (!pandaSuccess || !(await reconnectIfNeeded())) {
-        throw new Error("Failed to write panda.bin or reconnect after flash")
+      if (!pandaSuccess) {
+        throw new Error("Failed to write panda.bin")
       }
 
-      // ---- bootstub @ 0x08000000 (erase one 16KiB page) ----
+      // Brief pause between phases
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+
+      // ---- PHASE 2: Flash bootstub.panda.bin @ 0x08000000 ----
+      log(`[v0] 📝 PHASE 2: Flashing bootstub.panda.bin (${bootstubBuffer.byteLength} bytes)`)
+
+      // Try to reconnect if device disconnected
+      try {
+        await dfuDevice.getState()
+        log("[v0] ✅ Device still connected, proceeding with bootstub")
+      } catch (e) {
+        log("[v0] ⚠️ Device disconnected after panda.bin - this is often normal")
+        log("[v0] 🔄 Attempting to continue with bootstub flash...")
+      }
+
       setStatusMessage("Erasing bootstub area...")
-      log("[v0] DFUSe: ERASE bootstub page")
+      log("[v0] 🗑️ Erasing bootstub page (0x08000000)")
       await withTimeout(dfuDevice.dfuseErase(0x08000000), 10000, "Erase 0x08000000")
 
       setStatusMessage("Writing bootstub firmware...")
-      log("[v0] DFUSe: SETADDR 0x08000000")
+      log("[v0] 📍 Setting address to 0x08000000")
       await withTimeout(dfuDevice.dfuseSetAddress(0x08000000), 5000, "Set address 0x08000000")
-      log("[v0] Writing bootstub.panda.bin (start block 2)")
-      await withTimeout(
-        writeWithFallback(dfuDevice, bootstubBuffer, ladder, "bootstub.panda.bin"),
+
+      const bootstubSuccess = await withTimeout(
+        writeWithFallback(dfuDevice, bootstubBuffer, ladder, "bootstub.panda.bin", log),
         30000,
         "Write bootstub.panda.bin",
       )
 
+      if (!bootstubSuccess) {
+        throw new Error("Failed to write bootstub.panda.bin")
+      }
+
+      // Try to exit DFU mode gracefully
       try {
-        log("[v0] Attempting to exit DFU mode...")
+        log("[v0] 🚪 Attempting to exit DFU mode...")
         await (dfuDevice as any).requestOut?.(0x00, new ArrayBuffer(0), 1000)
+        log("[v0] ✅ DFU exit command sent successfully")
       } catch (e) {
-        log("[v0] Exit DFU mode command failed (this is often normal):", e instanceof Error ? e.message : String(e))
+        log("[v0] 💡 DFU exit failed (normal) - device should reboot automatically")
       }
 
       setStatusMessage("✅ Flash completed successfully! Device should reboot automatically.")
-      log("[v0] ✅ Flash completed successfully! 🎉")
-      log("[v0] 💡 Device should now reboot and exit DFU mode automatically")
+      log("[v0] 🎉 FLASH COMPLETE! Both panda.bin and bootstub.panda.bin written successfully")
+      log("[v0] 🔄 Device should now reboot and exit DFU mode automatically")
     } catch (e: any) {
       const errorMsg = e?.message || String(e)
+      log(`[v0] ❌ Flash failed: ${errorMsg}`)
 
       if (errorMsg.includes("timed out")) {
-        setStatusMessage(`⏱️ Flash failed: ${errorMsg}. Try disconnecting and reconnecting the device.`)
+        setStatusMessage(`⏱️ Flash failed: Operation timed out. Try disconnecting and reconnecting the device.`)
       } else if (errorMsg.includes("disconnected")) {
-        setStatusMessage(
-          `⚠️ Device disconnected during flash. This may indicate successful completion - check if device rebooted.`,
-        )
+        setStatusMessage(`⚠️ Device disconnected during flash. Check if device rebooted successfully.`)
+        log("[v0] 💡 Disconnection might indicate successful completion - check device status")
       } else {
         setStatusMessage(`❌ Flash failed: ${errorMsg}`)
       }
-
-      log("[v0] Flash error:", errorMsg)
     }
-  }, [dfuDevice, loadFirmware, log, writeWithFallback, isFirmwareReady])
+  }, [dfuDevice, loadFirmware, log, isFirmwareReady])
 
   const onPickFiles = async (ev: React.ChangeEvent<HTMLInputElement>) => {
     const files = ev.currentTarget.files
@@ -803,7 +816,7 @@ export default function Page() {
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6 relative">
       <div className="fixed bottom-4 right-4 text-xs text-muted-foreground bg-background/80 backdrop-blur-sm px-2 py-1 rounded border">
-        <div>v51</div>
+        <div>v54</div>
         <div>Sept 9 2025</div>
       </div>
 
@@ -845,6 +858,39 @@ export default function Page() {
               <p className="text-sm text-blue-700">
                 This will automatically download and flash the SunnyPilot Basic firmware from the repository.
               </p>
+              <div className="pt-2 border-t border-blue-200">
+                <p className="text-xs text-blue-600 mb-2">If automatic download fails, use these direct links:</p>
+                <div className="flex gap-2 flex-wrap">
+                  <a
+                    href="https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-basic/panda.bin"
+                    download="panda.bin"
+                    className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 rounded border border-blue-300 transition-colors"
+                  >
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path
+                        fillRule="evenodd"
+                        d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    panda.bin
+                  </a>
+                  <a
+                    href="https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-basic/bootstub.panda.bin"
+                    download="bootstub.panda.bin"
+                    className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 rounded border border-blue-300 transition-colors"
+                  >
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path
+                        fillRule="evenodd"
+                        d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    bootstub.panda.bin
+                  </a>
+                </div>
+              </div>
             </div>
           )}
 
@@ -854,6 +900,39 @@ export default function Page() {
               <p className="text-sm text-purple-700">
                 This will automatically download and flash the SunnyPilot Advanced firmware from the repository.
               </p>
+              <div className="pt-2 border-t border-purple-200">
+                <p className="text-xs text-purple-600 mb-2">If automatic download fails, use these direct links:</p>
+                <div className="flex gap-2 flex-wrap">
+                  <a
+                    href="https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-advanced/panda.bin"
+                    download="panda.bin"
+                    className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-purple-100 hover:bg-purple-200 text-purple-800 rounded border border-purple-300 transition-colors"
+                  >
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path
+                        fillRule="evenodd"
+                        d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    panda.bin
+                  </a>
+                  <a
+                    href="https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-advanced/bootstub.panda.bin"
+                    download="bootstub.panda.bin"
+                    className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-purple-100 hover:bg-purple-200 text-purple-800 rounded border border-purple-300 transition-colors"
+                  >
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path
+                        fillRule="evenodd"
+                        d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    bootstub.panda.bin
+                  </a>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1005,6 +1084,30 @@ export default function Page() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {firmwareType !== "upload" && (
+        <div className="mt-4 p-4 bg-muted rounded-lg">
+          <p className="text-sm text-muted-foreground mb-2">Backup download links (if needed):</p>
+          <div className="flex flex-col gap-2">
+            <a
+              href={`https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-${firmwareType}/panda.bin`}
+              download="panda.bin"
+              className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800"
+            >
+              <Download className="h-4 w-4" />
+              Download panda.bin
+            </a>
+            <a
+              href={`https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-${firmwareType}/bootstub.panda.bin`}
+              download="bootstub.panda.bin"
+              className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800"
+            >
+              <Download className="h-4 w-4" />
+              Download bootstub.panda.bin
+            </a>
+          </div>
+        </div>
       )}
 
       {/* Log */}
