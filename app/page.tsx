@@ -511,21 +511,16 @@ export default function Page() {
   }, [normalDevice, log])
 
   const connectDfuDevice = useCallback(async () => {
+    const device = normalDevice
+    if (!device) return
+
     try {
       setStatusMessage("Connecting to DFU device...")
-
-      const device = await navigator.usb.requestDevice({
-        filters: [
-          { vendorId: 0x0483, productId: 0xdf11 }, // ST DFU (DFUSe)
-          { classCode: 0xfe, subclassCode: 0x01 }, // DFU class
-        ],
-      })
-
-      log("[v0] Found DFU device:", device.productName || "STM32 BOOTLOADER")
+      log("[v0] Attempting to connect to DFU device...")
 
       const dfuIfs = findDfuInterfaces(device)
       if (dfuIfs.length === 0) {
-        throw new Error("No DFU (protocol 2) interface found. Device may not be in DFU mode.")
+        throw new Error("No DFU interfaces found")
       }
 
       const settings = dfuIfs[0]
@@ -537,8 +532,14 @@ export default function Page() {
 
       setDfuDevice(dev)
       setConnectionStep("dfu-connected")
-      setStatusMessage("DFU device connected successfully! Ready to flash firmware.")
+      setStatusMessage("DFU device connected successfully! Starting firmware flash...")
       log("[v0] DFU device opened successfully")
+
+      setTimeout(() => {
+        if (isFirmwareReady()) {
+          flash()
+        }
+      }, 1000)
     } catch (e: any) {
       log("[v0] DFU connect failed:", e?.message || String(e))
       setStatusMessage(`DFU connection failed: ${e?.message || String(e)}`)
@@ -833,7 +834,7 @@ export default function Page() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Step 1: Select Firmware</CardTitle>
+          <CardTitle>Select Firmware</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-3">
@@ -1006,16 +1007,7 @@ export default function Page() {
       {connectionStep === "dfu-connected" && (
         <Card>
           <CardHeader>
-            <CardTitle>Flash Firmware</CardTitle>
-            <CardDescription>
-              Ready to flash{" "}
-              {firmwareType === "sunny-basic"
-                ? "SunnyPilot Basic"
-                : firmwareType === "sunny-advanced"
-                  ? "SunnyPilot Advanced"
-                  : "uploaded"}{" "}
-              firmware
-            </CardDescription>
+            <CardTitle>Flashing Progress</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -1026,10 +1018,7 @@ export default function Page() {
             </div>
 
             <div className="flex gap-2">
-              <Button onClick={flash} disabled={!isFirmwareReady()} className="flex-1">
-                Flash Firmware
-              </Button>
-              <Button onClick={disconnect} variant="outline">
+              <Button onClick={disconnect} variant="outline" className="flex-1 bg-transparent">
                 Disconnect
               </Button>
             </div>
