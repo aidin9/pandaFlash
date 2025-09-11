@@ -379,50 +379,80 @@ export default function Page() {
     if (!normalDevice) return
 
     setDfuButtonDisabled(true)
-    log("[v0] Sending DFU mode command...")
+    setTimeout(() => setDfuButtonDisabled(false), 5000)
 
-    const maxAttempts = 3
-    let success = false
+    try {
+      setStatusMessage("Entering DFU mode...")
+      log("[v0] Sending DFU mode command...")
 
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        log(`[v0] DFU mode attempt ${attempt}/${maxAttempts}...`)
-        await normalDevice.controlTransferOut({
-          requestType: "vendor",
-          recipient: "device",
-          request: 0xd1,
-          value: 0,
-          index: 0,
-        })
-        success = true
-        break
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error)
-        log(`[v0] DFU mode attempt ${attempt} error: ${errorMsg}`)
-        if (attempt === maxAttempts) {
-          log("[v0] All DFU mode attempts failed")
-          setDfuButtonDisabled(false)
-          return
+      await normalDevice.open()
+
+      let success = false
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          log(`[v0] DFU mode attempt ${attempt}/3...`)
+
+          // Send recover command (vendor-specific control transfer)
+          const result = await normalDevice.controlTransferOut({
+            requestType: "vendor",
+            recipient: "device",
+            request: 0xd1, // recover command
+            value: 0,
+            index: 0,
+          })
+
+          if (result.status === "ok") {
+            log("[v0] DFU mode command sent successfully")
+            success = true
+            break
+          }
+        } catch (error: any) {
+          log(`[v0] DFU mode attempt ${attempt} error:`, error.message)
+          if (attempt === 3 || error.message.includes("disconnected")) {
+            // If disconnected, that's actually success
+            if (error.message.includes("disconnected")) {
+              success = true
+            }
+            break
+          }
+          // Wait a bit before retry
+          await new Promise((resolve) => setTimeout(resolve, 2000))
         }
-        await new Promise((resolve) => setTimeout(resolve, 2000))
       }
-    }
 
-    if (success) {
-      log("[v0] Waiting for device to fully enter DFU mode...")
-      setStatusMessage("Device entering DFU mode...")
+      if (success) {
+        log("[v0] Waiting for device to fully enter DFU mode...")
+        await new Promise((resolve) => setTimeout(resolve, 3000))
+      }
 
-      // Wait for device to enter DFU mode, then auto-connect
-      setTimeout(async () => {
-        log("[v0] Device should now be in DFU mode (solid green LED)")
+      // Device will disconnect when entering DFU mode
+      try {
+        await normalDevice.close()
+      } catch {
+        // Expected - device disconnects
+      }
+
+      setNormalDevice(null)
+      setConnectionStep("dfu-mode")
+      setStatusMessage(
+        'Device entered DFU mode successfully! LED should be solid green. Click "Connect DFU Device" to continue.',
+      )
+      log("[v0] Device should now be in DFU mode (solid green LED)")
+    } catch (error: any) {
+      log("[v0] DFU mode entry error:", error.message)
+      // Even if we get a disconnect error, the device likely entered DFU mode
+      if (error.message.includes("disconnected")) {
+        setNormalDevice(null)
         setConnectionStep("dfu-mode")
-        setDfuButtonDisabled(false)
-
-        // Auto-connect to DFU device
-        setTimeout(async () => {
-          await connectDfuDevice()
-        }, 1000)
-      }, 3000)
+        setStatusMessage(
+          'Device entered DFU mode successfully! LED should be solid green. Click "Connect DFU Device" to continue.',
+        )
+        log("[v0] Device disconnected (expected) - now in DFU mode")
+      } else {
+        setStatusMessage(
+          `Failed to enter DFU mode: ${error.message}. Try disconnecting and reconnecting the device, then try again.`,
+        )
+      }
     }
   }, [normalDevice, log])
 
@@ -773,7 +803,7 @@ export default function Page() {
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6 relative">
       <div className="fixed bottom-4 right-4 text-xs text-muted-foreground bg-background/80 backdrop-blur-sm px-2 py-1 rounded border">
-        <div>v52</div>
+        <div>v51</div>
         <div>Sept 9 2025</div>
       </div>
 
@@ -811,59 +841,19 @@ export default function Page() {
 
           {firmwareType === "sunny-basic" && (
             <div className="space-y-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <h3 className="font-semibold text-blue-900">Basic Firmware</h3>
+              <h3 className="font-semibold text-blue-900">SunnyPilot Basic</h3>
               <p className="text-sm text-blue-700">
                 This will automatically download and flash the SunnyPilot Basic firmware from the repository.
               </p>
-              <div className="text-xs text-blue-600 space-y-1">
-                <p className="font-medium">Backup download links:</p>
-                <div className="flex gap-2">
-                  <a
-                    href="https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-basic/panda.bin"
-                    download="panda.bin"
-                    className="underline hover:no-underline"
-                  >
-                    panda.bin
-                  </a>
-                  <span>•</span>
-                  <a
-                    href="https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-basic/bootstub.panda.bin"
-                    download="bootstub.panda.bin"
-                    className="underline hover:no-underline"
-                  >
-                    bootstub.panda.bin
-                  </a>
-                </div>
-              </div>
             </div>
           )}
 
           {firmwareType === "sunny-advanced" && (
             <div className="space-y-3 p-4 bg-purple-50 rounded-lg border border-purple-200">
-              <h3 className="font-semibold text-purple-900">Advanced Firmware</h3>
+              <h3 className="font-semibold text-purple-900">SunnyPilot Advanced</h3>
               <p className="text-sm text-purple-700">
                 This will automatically download and flash the SunnyPilot Advanced firmware from the repository.
               </p>
-              <div className="text-xs text-purple-600 space-y-1">
-                <p className="font-medium">Backup download links:</p>
-                <div className="flex gap-2">
-                  <a
-                    href="https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-advanced/panda.bin"
-                    download="panda.bin"
-                    className="underline hover:no-underline"
-                  >
-                    panda.bin
-                  </a>
-                  <span>•</span>
-                  <a
-                    href="https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-advanced/bootstub.panda.bin"
-                    download="bootstub.panda.bin"
-                    className="underline hover:no-underline"
-                  >
-                    bootstub.panda.bin
-                  </a>
-                </div>
-              </div>
             </div>
           )}
 
@@ -931,17 +921,15 @@ export default function Page() {
           </CardContent>
         </Card>
 
-        <Card
-          className={connectionStep === "dfu-mode" || connectionStep === "dfu-connected" ? "ring-2 ring-primary" : ""}
-        >
+        <Card className={connectionStep === "normal" ? "ring-2 ring-primary" : ""}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-sm flex items-center justify-center">
                 2
               </span>
-              DFU Mode & Connect
+              Enter DFU Mode
             </CardTitle>
-            <CardDescription>Enter DFU mode and connect automatically</CardDescription>
+            <CardDescription>Put device into firmware update mode</CardDescription>
           </CardHeader>
           <CardContent>
             <Button
@@ -953,9 +941,26 @@ export default function Page() {
                 ? dfuButtonDisabled
                   ? "Entering DFU Mode..."
                   : "Enter DFU Mode"
-                : connectionStep === "dfu-connected"
-                  ? "✓ DFU Connected"
+                : connectionStep === "dfu-mode"
+                  ? "✓ In DFU Mode"
                   : "Waiting for connection"}
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className={connectionStep === "dfu-mode" ? "ring-2 ring-primary" : ""}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-sm flex items-center justify-center">
+                3
+              </span>
+              Connect DFU
+            </CardTitle>
+            <CardDescription>Connect to device in DFU mode</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={connectDfuDevice} disabled={connectionStep !== "dfu-mode"} className="w-full">
+              {connectionStep === "dfu-connected" ? "✓ DFU Connected" : "Connect DFU Device"}
             </Button>
           </CardContent>
         </Card>
