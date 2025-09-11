@@ -371,6 +371,7 @@ export default function Page() {
   const [statusMessage, setStatusMessage] = useState<string>("")
 
   const [dfuButtonDisabled, setDfuButtonDisabled] = useState(false)
+  const [canManualFlash, setCanManualFlash] = useState(false)
 
   const connectNormalDevice = useCallback(async () => {
     clear()
@@ -548,11 +549,35 @@ export default function Page() {
       setStatusMessage("DFU device connected successfully! Starting firmware flash...")
       log("[v0] DFU device opened successfully")
 
-      setTimeout(() => {
-        if (isFirmwareReady()) {
-          flash()
+      setCanManualFlash(true)
+
+      const tryAutoFlash = async () => {
+        let attempts = 0
+        while (attempts < 3) {
+          attempts++
+          log(`[v0] Auto-flash attempt ${attempts}/3`)
+
+          if (isFirmwareReady()) {
+            try {
+              await flash()
+              break
+            } catch (error) {
+              log(`[v0] Auto-flash attempt ${attempts} failed:`, error)
+              if (attempts < 3) {
+                await new Promise((resolve) => setTimeout(resolve, 2000)) // Retry after 2 seconds
+              } else {
+                setStatusMessage("Auto-flash failed. Please use the manual flash button to retry.")
+              }
+            }
+          } else {
+            log("[v0] Firmware not ready for auto-flash")
+            setStatusMessage("Firmware not ready. Please select firmware and try manual flash.")
+            break
+          }
         }
-      }, 1000)
+      }
+
+      setTimeout(tryAutoFlash, 1500) // Initial delay of 1.5 seconds
     } catch (e: any) {
       log("[v0] DFU connect failed:", e?.message || String(e))
       setStatusMessage(`DFU connection failed: ${e?.message || String(e)}`)
@@ -694,6 +719,8 @@ export default function Page() {
       return
     }
 
+    setCanManualFlash(false)
+
     try {
       setStatusMessage("Loading firmware...")
       const { pandaBuffer, bootstubBuffer } = await loadFirmware()
@@ -780,21 +807,16 @@ export default function Page() {
         log("[v0] 💡 DFU exit failed (normal) - device should reboot automatically")
       }
 
-      setStatusMessage("✅ Flash completed successfully! Device should reboot automatically.")
-      log("[v0] 🎉 FLASH COMPLETE! Both panda.bin and bootstub.panda.bin written successfully")
-      log("[v0] 🔄 Device should now reboot and exit DFU mode automatically")
-    } catch (e: any) {
-      const errorMsg = e?.message || String(e)
-      log(`[v0] ❌ Flash failed: ${errorMsg}`)
+      setStatusMessage("✅ Firmware flashed successfully!")
+      log("[v0] ✅ Firmware flash completed successfully!")
 
-      if (errorMsg.includes("timed out")) {
-        setStatusMessage(`⏱️ Flash failed: Operation timed out. Try disconnecting and reconnecting the device.`)
-      } else if (errorMsg.includes("disconnected")) {
-        setStatusMessage(`⚠️ Device disconnected during flash. Check if device rebooted successfully.`)
-        log("[v0] 💡 Disconnection might indicate successful completion - check device status")
-      } else {
-        setStatusMessage(`❌ Flash failed: ${errorMsg}`)
-      }
+      setCanManualFlash(true)
+    } catch (error: any) {
+      const errorMsg = `Flash error: ${error.message}`
+      setStatusMessage(errorMsg)
+      log("[v0] Flash error:", error)
+
+      setCanManualFlash(true)
     }
   }, [dfuDevice, loadFirmware, log, isFirmwareReady])
 
@@ -1002,10 +1024,21 @@ export default function Page() {
             </CardTitle>
             <CardDescription>Connect to device in DFU mode - flashing will start automatically</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
             <Button onClick={connectDfuDevice} disabled={connectionStep !== "dfu-mode"} className="w-full">
               {connectionStep === "dfu-connected" ? "✓ DFU Connected" : "Connect DFU Device & Flash"}
             </Button>
+
+            {connectionStep === "dfu-connected" && (
+              <Button
+                onClick={flash}
+                disabled={!canManualFlash || !isFirmwareReady()}
+                variant="outline"
+                className="w-full bg-transparent"
+              >
+                {canManualFlash ? "Manual Flash (Retry)" : "Flashing..."}
+              </Button>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -1081,7 +1114,7 @@ export default function Page() {
           </CardContent>
         </Card>
       )}
-      <div className="text-center text-sm text-muted-foreground mt-8">Version 0.61</div>
+      <div className="text-center text-sm text-muted-foreground mt-8">Version 0.62</div>
     </div>
   )
 }
