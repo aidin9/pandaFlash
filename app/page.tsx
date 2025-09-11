@@ -4,7 +4,6 @@ import type React from "react"
 import { useCallback, useMemo, useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Download } from "lucide-react"
@@ -834,105 +833,57 @@ export default function Page() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Firmware Selection</CardTitle>
-          <CardDescription>Choose your firmware variant and download the required files</CardDescription>
+          <CardTitle>Step 1: Select Firmware</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Select
-            value={firmwareType}
-            onValueChange={(value: "sunny-basic" | "sunny-advanced" | "upload") => setFirmwareType(value)}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="sunny-basic">SunnyPilot Basic</SelectItem>
-              <SelectItem value="sunny-advanced">SunnyPilot Advanced</SelectItem>
-              <SelectItem value="upload">Upload Custom Files</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="space-y-3">
+            <label className="block text-base font-semibold">Choose firmware type:</label>
+            <select
+              value={firmwareType}
+              onChange={(e) => setFirmwareType(e.target.value as "sunny-basic" | "sunny-advanced" | "upload")}
+              className="w-full p-3 text-lg border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+            >
+              <option value="sunny-basic">SunnyPilot Basic (Recommended)</option>
+              <option value="sunny-advanced">SunnyPilot Advanced</option>
+              <option value="upload">Upload Custom Files</option>
+            </select>
+          </div>
 
           {firmwareType === "sunny-basic" && (
             <div className="space-y-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <h3 className="font-semibold text-blue-900">SunnyPilot Basic</h3>
               <p className="text-sm text-blue-700">
                 This will automatically download and flash the SunnyPilot Basic firmware from the repository.
               </p>
-              <div className="pt-2 border-t border-blue-200">
-                <p className="text-xs text-blue-600 mb-2">If automatic download fails, use these direct links:</p>
-                <div className="flex gap-2 flex-wrap">
-                  <a
-                    href="https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-basic/panda.bin"
-                    download="panda.bin"
-                    className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 rounded border border-blue-300 transition-colors"
-                  >
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path
-                        fillRule="evenodd"
-                        d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    panda.bin
-                  </a>
-                  <a
-                    href="https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-basic/bootstub.panda.bin"
-                    download="bootstub.panda.bin"
-                    className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 rounded border border-blue-300 transition-colors"
-                  >
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path
-                        fillRule="evenodd"
-                        d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    bootstub.panda.bin
-                  </a>
-                </div>
-              </div>
+              <p className="text-xs text-blue-600">
+                Source:{" "}
+                <a
+                  href="https://github.com/sunnypilot/panda/tree/sunnypilot_wp_chrysler_basic"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-blue-800"
+                >
+                  sunnypilot/panda (sunnypilot_wp_chrysler_basic)
+                </a>
+              </p>
             </div>
           )}
 
           {firmwareType === "sunny-advanced" && (
             <div className="space-y-3 p-4 bg-purple-50 rounded-lg border border-purple-200">
-              <h3 className="font-semibold text-purple-900">SunnyPilot Advanced</h3>
               <p className="text-sm text-purple-700">
                 This will automatically download and flash the SunnyPilot Advanced firmware from the repository.
               </p>
-              <div className="pt-2 border-t border-purple-200">
-                <p className="text-xs text-purple-600 mb-2">If automatic download fails, use these direct links:</p>
-                <div className="flex gap-2 flex-wrap">
-                  <a
-                    href="https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-advanced/panda.bin"
-                    download="panda.bin"
-                    className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-purple-100 hover:bg-purple-200 text-purple-800 rounded border border-purple-300 transition-colors"
-                  >
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path
-                        fillRule="evenodd"
-                        d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    panda.bin
-                  </a>
-                  <a
-                    href="https://raw.githubusercontent.com/aidin9/pandaFlash/main/prebuilt-binaries/sunny-advanced/bootstub.panda.bin"
-                    download="bootstub.panda.bin"
-                    className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-purple-100 hover:bg-purple-200 text-purple-800 rounded border border-purple-300 transition-colors"
-                  >
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path
-                        fillRule="evenodd"
-                        d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    bootstub.panda.bin
-                  </a>
-                </div>
-              </div>
+              <p className="text-xs text-purple-600">
+                Source:{" "}
+                <a
+                  href="https://github.com/sunnypilot/panda/tree/sunnypilot_wp_chrysler_advanced"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-purple-800"
+                >
+                  sunnypilot/panda (sunnypilot_wp_chrysler_advanced)
+                </a>
+              </p>
             </div>
           )}
 
