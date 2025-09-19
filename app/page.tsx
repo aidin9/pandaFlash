@@ -446,7 +446,7 @@ export default function Page() {
       if (device.productId === 0xdf11) {
         log("[v0] Device already in DFU mode, proceeding to step 3")
         setConnectionStep("dfu-mode")
-        setStatusMessage('Device is already in DFU mode (solid green LED). Click "Connect DFU Device" to continue.')
+        setStatusMessage('Device is already in DFU mode. Click "Connect DFU Device" to continue.')
         return
       }
 
@@ -535,19 +535,15 @@ export default function Page() {
 
       setNormalDevice(null)
       setConnectionStep("dfu-mode")
-      setStatusMessage(
-        'Device entered DFU mode successfully! LED should be solid green. Click "Connect DFU Device" to continue.',
-      )
-      log("[v0] Device should now be in DFU mode (solid green LED)")
+      setStatusMessage('Device entered DFU mode successfully! Click "Connect DFU Device" to continue.')
+      log("[v0] Device should now be in DFU mode")
     } catch (error: any) {
       log("[v0] DFU mode entry error:", error.message)
       // Even if we get a disconnect error, the device likely entered DFU mode
       if (error.message.includes("disconnected")) {
         setNormalDevice(null)
         setConnectionStep("dfu-mode")
-        setStatusMessage(
-          'Device entered DFU mode successfully! LED should be solid green. Click "Connect DFU Device" to continue.',
-        )
+        setStatusMessage('Device entered DFU mode successfully! Click "Connect DFU Device" to continue.')
         log("[v0] Device disconnected (expected) - now in DFU mode")
       } else {
         setStatusMessage(
@@ -863,8 +859,8 @@ export default function Page() {
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6 relative">
       <div className="fixed bottom-4 right-4 bg-gray-100 dark:bg-gray-800 p-2 rounded text-xs text-gray-600 dark:text-gray-400">
-        <div>Version 0.65</div>
-        <div>Sept 11 2025</div>
+        <div>Version 0.68</div>
+        <div>Sept 19 2025</div>
       </div>
 
       <Alert className="border-red-500 bg-red-50 text-red-900">
@@ -875,8 +871,28 @@ export default function Page() {
       </Alert>
 
       <div className="text-center">
-        <h1 className="text-3xl font-bold text-balance">White Panda Firmware Flasher</h1>
-        <p className="text-muted-foreground mt-2">Automatic WebUSB DFU Flashing Process</p>
+        <h1 className="text-3xl font-bold text-balance">Panda Firmware Flasher</h1>
+        <p className="text-muted-foreground mt-2 max-w-2xl mx-auto">
+          Flash custom firmware to Comma White Panda or similar devices. Designed for WP-Mod firmware used by{" "}
+          <a
+            href="https://github.com/sunnypilot/sunnypilot"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 hover:underline"
+          >
+            SunnyPilot
+          </a>{" "}
+          and{" "}
+          <a
+            href="https://github.com/jvePilot/jvePilot"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 hover:underline"
+          >
+            JvePilot
+          </a>{" "}
+          to enable steer-to-zero functionality.
+        </p>
       </div>
 
       <Card>
