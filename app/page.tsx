@@ -859,7 +859,7 @@ export default function Page() {
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6 relative">
       <div className="fixed bottom-4 right-4 bg-gray-100 dark:bg-gray-800 p-2 rounded text-xs text-gray-600 dark:text-gray-400">
-        <div>Version 0.68</div>
+        <div>Version 0.69</div>
         <div>Sept 19 2025</div>
       </div>
 

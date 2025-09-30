@@ -1,35 +1,70 @@
-# Panda firmware flasher
+# Panda Firmware Flasher
 
-This is web app is intended to eventually allow flashing of White Panda devices directly with SunnyPilot Basic and Advanced firmwares from GitHub.
-For now, it should work with the "Upload Binaries" option.
+A web-based tool for flashing custom firmware to Comma White Panda devices using WebUSB and DFU (Device Firmware Update) protocol directly in your browser.
 
-Check back later for updates!
+## What is this?
 
+This tool enables you to flash modified firmware to your Comma White Panda or similar devices, specifically designed for the WP-Mod (White Panda Modification) used by [SunnyPilot](https://github.com/sunnyhaibin/sunnypilot) and [JvePilot](https://github.com/jvePilot/openpilot) to enable steer-to-zero functionality.
 
+## Features
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/aidinb-9448s-projects/v0-panda-firmware-flasher)
-[![Built with v0](https://img.shields.io/badge/Built%20with-v0.app-black?style=for-the-badge)](https://v0.app/chat/projects/UKG9GWWJ3iH)
+- **Browser-based flashing** - No drivers or command-line tools required
+- **Prebuilt firmware options** - Direct access to SunnyPilot Basic and Advanced firmware variants
+- **Custom firmware upload** - Upload your own compiled `.bin` files
+- **Automatic DFU mode** - Seamless transition to DFU mode for flashing
+- **Real-time progress** - Live status updates and progress tracking
+- **Cross-platform** - Works on Windows, macOS, and Linux with Chrome/Edge browsers
 
-## Overview
+## Usage
 
-This repository will stay in sync with your deployed chats on [v0.app](https://v0.app).
-Any changes you make to your deployed app will be automatically pushed to this repository from [v0.app](https://v0.app).
+**Access the live app here:** [https://aidin9.github.io/pandaFlash/](https://aidin9.github.io/pandaFlash/)
 
-## Deployment
+### Requirements
 
-Your project is live at:
+- Chrome or Edge browser (WebUSB support required)
+- Comma White Panda device
+- USB cable
 
-**[https://vercel.com/aidinb-9448s-projects/v0-panda-firmware-flasher](https://vercel.com/aidinb-9448s-projects/v0-panda-firmware-flasher)**
+### Steps
 
-## Build your app
+1. Select your desired firmware (prebuilt or upload custom)
+2. Connect your Panda device via USB
+3. Click to connect and enter DFU mode
+4. Flashing begins automatically once connected
+5. Wait for completion and device reconnection
 
-Continue building your app on:
+## Technical Details
 
-**[https://v0.app/chat/projects/UKG9GWWJ3iH](https://v0.app/chat/projects/UKG9GWWJ3iH)**
+This tool uses:
+- **WebUSB API** for direct browser-to-device communication
+- **WebDFU** for Device Firmware Update protocol implementation
+- **Next.js** for the web application framework
+- **TypeScript** for type-safe code
 
-## How It Works
+## Development
 
-1. Create and modify your project using [v0.app](https://v0.app)
-2. Deploy your chats from the v0 interface
-3. Changes are automatically pushed to this repository
-4. Vercel deploys the latest version from this repository
+To run locally:
+
+\`\`\`bash
+npm install
+npm run dev
+\`\`\`
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## Credits
+
+- Firmware sources: [SunnyPilot](https://github.com/sunnyhaibin/sunnypilot) and [JvePilot](https://github.com/jvePilot/openpilot)
+- WebDFU implementation based on [devanlai/webdfu](https://github.com/devanlai/webdfu)
+- Original Panda firmware: [commaai/panda](https://github.com/commaai/panda)
+
+## License
+
+MIT License - See LICENSE file for details
+
+## Disclaimer
+
+This tool modifies device firmware. Use at your own risk. Always ensure you have a way to recover your device if something goes wrong.
+\`\`\`
+
+```tsx file="" isHidden
