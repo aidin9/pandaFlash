@@ -1,4 +1,6 @@
-# Panda Firmware Flasher
+# [Panda Firmware Flasher](https://aidin9.github.io/pandaFlash/)
+
+## 🚀 [**USE THE APP HERE**](https://aidin9.github.io/pandaFlash/)
 
 A web-based tool for flashing custom firmware to Comma White Panda devices using WebUSB and DFU (Device Firmware Update) protocol directly in your browser.
 
@@ -15,23 +17,20 @@ This tool enables you to flash modified firmware to your Comma White Panda or si
 - **Real-time progress** - Live status updates and progress tracking
 - **Cross-platform** - Works on Windows, macOS, and Linux with Chrome/Edge browsers
 
-## Usage
-
-**Access the live app here:** [https://aidin9.github.io/pandaFlash/](https://aidin9.github.io/pandaFlash/)
-
-### Requirements
+## Requirements
 
 - Chrome or Edge browser (WebUSB support required)
 - Comma White Panda device
 - USB cable
 
-### Steps
+## How to Use
 
-1. Select your desired firmware (prebuilt or upload custom)
-2. Connect your Panda device via USB
-3. Click to connect and enter DFU mode
-4. Flashing begins automatically once connected
-5. Wait for completion and device reconnection
+1. **[Open the app](https://aidin9.github.io/pandaFlash/)**
+2. Select your desired firmware (prebuilt or upload custom)
+3. Connect your Panda device via USB
+4. Click to connect and enter DFU mode
+5. Flashing begins automatically once connected
+6. Wait for completion and device reconnection
 
 ## Technical Details
 
@@ -65,6 +64,3 @@ MIT License - See LICENSE file for details
 ## Disclaimer
 
 This tool modifies device firmware. Use at your own risk. Always ensure you have a way to recover your device if something goes wrong.
-\`\`\`
-
-```tsx file="" isHidden

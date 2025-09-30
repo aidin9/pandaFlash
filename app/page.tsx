@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Download } from "lucide-react"
+import { Download, Github } from "lucide-react"
 
 /** ---------- Small logging helper ---------- */
 const useLogger = () => {
@@ -858,9 +858,20 @@ export default function Page() {
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6 relative">
-      <div className="fixed bottom-4 right-4 bg-gray-100 dark:bg-gray-800 p-2 rounded text-xs text-gray-600 dark:text-gray-400">
-        <div>Version 0.69</div>
-        <div>Sept 19 2025</div>
+      <div className="fixed bottom-4 right-4 flex items-center gap-3">
+        <a
+          href="https://github.com/aidin9/pandaFlash"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="bg-gray-100 dark:bg-gray-800 p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+          title="View on GitHub"
+        >
+          <Github className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+        </a>
+        <div className="bg-gray-100 dark:bg-gray-800 p-2 rounded text-xs text-gray-600 dark:text-gray-400">
+          <div>Version 0.70</div>
+          <div>Sept 19 2025</div>
+        </div>
       </div>
 
       <Alert className="border-red-500 bg-red-50 text-red-900">
