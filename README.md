@@ -1,6 +1,6 @@
 # [Panda Firmware Flasher](https://aidin9.github.io/pandaFlash/)
 
-## 🚀 [**USE THE APP HERE**](https://aidin9.github.io/pandaFlash/)
+## 🚀 [**Click to launch: https://aidin9.github.io/pandaFlash/**](https://aidin9.github.io/pandaFlash/)
 
 A web-based tool for flashing custom firmware to Comma White Panda devices using WebUSB and DFU (Device Firmware Update) protocol directly in your browser.
 
